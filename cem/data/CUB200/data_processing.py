@@ -14,10 +14,8 @@ from os.path import isfile, isdir, join
 from collections import defaultdict as ddict
 
 
-def extract_data(data_dir):
-    cwd = os.getcwd()
-    data_path = join(cwd, data_dir + '/images')
-    val_ratio = 0.2
+def extract_data(data_dir, val_ratio=0.2):
+    data_path = join(data_dir, 'images')
 
     path_to_id_map = dict() #map from full image path to image id
     with open(data_path.replace('images', 'images.txt'), 'r') as f:
@@ -32,7 +30,7 @@ def extract_data(data_dir):
     # 1 = not visible, 2 = guessing, 3 = probably, 4 = definitely
     uncertainty_map = {1: {1: 0, 2: 0.5, 3: 0.75, 4:1}, #calibrate main label based on uncertainty label
                         0: {1: 0, 2: 0.5, 3: 0.25, 4: 0}}
-    with open(join(cwd, data_dir + '/attributes/image_attribute_labels.txt'), 'r') as f:
+    with open(join(data_dir, 'attributes/image_attribute_labels.txt'), 'r') as f:
         for line in f:
             file_idx, attribute_idx, attribute_label, attribute_certainty = line.strip().split()[:4]
             attribute_label = int(attribute_label)
@@ -43,7 +41,7 @@ def extract_data(data_dir):
             attribute_certainties_all[int(file_idx)].append(attribute_certainty)
 
     is_train_test = dict() #map from image id to 0 / 1 (1 = train)
-    with open(join(cwd, data_dir + '/train_test_split.txt'), 'r') as f:
+    with open(join(data_dir, 'train_test_split.txt'), 'r') as f:
         for line in f:
             idx, is_train = line.strip().split()
             is_train_test[int(idx)] = int(is_train)
