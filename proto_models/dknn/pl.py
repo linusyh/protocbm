@@ -17,8 +17,9 @@ ByteTensor = torch.cuda.ByteTensor if USE_CUDA else torch.ByteTensor
 
 
 class PL(Distribution):
-
-    arg_constraints = {'scores': constraints.positive, 'tau': constraints.positive}
+    # TODO: Restore constraint once no more problem
+    # arg_constraints = {'scores': constraints.positive, 'tau': constraints.positive}
+    arg_constraints = {}
     has_rsample = True
 
     @property

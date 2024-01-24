@@ -10,9 +10,53 @@ whether each neighbor is actually one of the k closest to each query.
 
 import torch
 import torch.nn.functional as F
+import lightning as L
 
 from proto_models.dknn.neuralsort import NeuralSort
 from proto_models.dknn.pl import PL
+
+
+class DKNNClassifier(L.LightningModule):    
+    def __init__(self,
+                 num_classes: int,
+                 prototype_feature: torch.Tensor,
+                 prototype_label: torch.Tensor,
+                 optim_cls=torch.optim.Adam,
+                 optim_params={},
+                 *args,
+                 **kwargs):
+        super().__init__()
+        self.num_classes = num_classes
+        self.prototype_feature = prototype_feature
+        self.prototype_label = prototype_label
+        self.optim_cls = optim_cls
+        self.optim_params = optim_params
+        
+        self.dknn = DKNN(*args, **kwargs)
+    
+    def has_prototype(self):
+        return self.prototype_feature is not None and self.prototype_label is not None
+    
+    def configure_optimizers(self):
+        optimiser = self.optim_cls(self.dknn.parameters(), **self.optim_params)
+        return dict(optimizer=optimiser)
+    
+    def on_train_epoch_start(self):
+        if self.has_prototype():
+            self.prototype_feature = self.prototype_feature.to(self.device)
+            self.prototype_label = self.prototype_label.to(self.device)
+    
+    def training_step(self, batch, batch_idx):
+        x, truth_y = batch
+        
+        loss = dknn_loss_warp_one_hot(self.dknn,
+                                      query=x,
+                                      neighbors=self.prototype_feature,
+                                      query_label=truth_y,
+                                      neighbor_labels=self.prototype_label,
+                                      method=self.dknn.method)
+        self.log('train_loss', loss, on_epoch=True, prog_bar=True)
+        return loss
 
 
 class DKNN(torch.nn.Module):
@@ -37,7 +81,8 @@ class DKNN(torch.nn.Module):
             norms = l2_norms
             scores = -norms  # B * N
         elif self.similarity == 'cosine':
-            scores = F.cosine_similarity(query.unsqueeze(1), neighbors.unsqueeze(0), dim=2) - 1
+            # scores = F.cosine_similarity(query.unsqueeze(1), neighbors.unsqueeze(0), dim=2) - 1
+            scores = F.cosine_similarity(query.unsqueeze(1), neighbors.unsqueeze(0), dim=2)
         else:
             raise ValueError('Unknown similarity for DKNN: {}'.format(self.similarity))
 
@@ -73,3 +118,28 @@ def dknn_loss(dknn_layer, query, neighbors, query_label, neighbor_labels, method
         return loss.mean()
     else:
         raise ValueError(method)
+    
+    
+def dknn_loss_warp_one_hot(dknn_layer, query, neighbors, query_label, neighbor_labels, method='deterministic', num_classes=-1):
+    if num_classes == -1:
+        num_classes = max(torch.max(query_label).item(), torch.max(neighbor_labels).item()) + 1
+    
+    return dknn_loss(dknn_layer, query, neighbors,
+                     query_label=F.one_hot(query_label, num_classes),
+                     neighbor_labels=F.one_hot(neighbor_labels, num_classes),
+                     method=method
+    )
+    
+    
+def dknn_results_analysis(dknn_output, neighbour_label, target_label, k):
+    with torch.no_grad():
+        total_neighbours = 0
+        correct_neighbours = 0
+        
+        for pred, label in zip(dknn_output, target_label):
+            _, top_idx = torch.topk(pred, k=k)
+            neighbours = neighbour_label[top_idx]
+            total_neighbours += k
+            correct_neighbours += (neighbours == label).sum().item()
+        
+        return correct_neighbours / total_neighbours
