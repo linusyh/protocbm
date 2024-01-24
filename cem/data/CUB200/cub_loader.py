@@ -776,42 +776,44 @@ class CUBDataset(Dataset):
     def __getitem__(self, idx):
         img_data = self.data[idx]
         img_path = img_data['img_path']
-        if self.path_transform == None:
-            img_path = img_path.replace(
-                '/juice/scr/scr102/scr/thaonguyen/CUB_supervision/datasets/',
-                '../data/CUB200/'
-            )
-            # Trim unnecessary paths
-            try:
-                idx = img_path.split('/').index('CUB_200_2011')
-                # if self.image_dir != 'images':
-                #     img_path = '/'.join([self.image_dir] + img_path.split('/')[idx+1:])
-                #     img_path = img_path.replace('images/', '')
-                # else:
-                # img_path = self.root_dir + '/' + '/'.join(img_path.split('/')[idx:])
-                img_path = self.root_dir + '/'.join(img_path.split('/')[idx:])
-                img = None
-                for _ in range(5):
-                    try:
-                        img = Image.open(img_path).convert('RGB')
-                        break
-                    except:
-                        pass
-                if img is None:
-                    raise ValueError(f"Failed to fetch {img_path} after 5 trials!")
-            except:
-                img_path_split = img_path.split('/')
-                split = 'train' if self.is_train else 'test'
-                img_path = '/'.join(img_path_split[:2] + [split] + img_path_split[2:])
+        if not self.no_img:
+            if self.path_transform == None:
+                img_path = img_path.replace(
+                    '/juice/scr/scr102/scr/thaonguyen/CUB_supervision/datasets/',
+                    '../data/CUB200/'
+                )
+                # Trim unnecessary paths
+                try:
+                    idx = img_path.split('/').index('CUB_200_2011')
+                    # if self.image_dir != 'images':
+                    #     img_path = '/'.join([self.image_dir] + img_path.split('/')[idx+1:])
+                    #     img_path = img_path.replace('images/', '')
+                    # else:
+                    # img_path = self.root_dir + '/' + '/'.join(img_path.split('/')[idx:])
+                    img_path = self.root_dir + '/'.join(img_path.split('/')[idx:])
+                    print(img_path)
+                    img = None
+                    for _ in range(5):
+                        try:
+                            img = Image.open(img_path).convert('RGB')
+                            break
+                        except:
+                            pass
+                    if img is None:
+                        raise ValueError(f"Failed to fetch {img_path} after 5 trials!")
+                except:
+                    img_path_split = img_path.split('/')
+                    split = 'train' if self.is_train else 'test'
+                    img_path = '/'.join(img_path_split[:2] + [split] + img_path_split[2:])
+                    img = Image.open(img_path).convert('RGB')
+            else:
+                img_path = self.path_transform(img_path)
                 img = Image.open(img_path).convert('RGB')
-        else:
-            img_path = self.path_transform(img_path)
-            img = Image.open(img_path).convert('RGB')
 
         class_label = img_data['class_label']
         if self.label_transform:
             class_label = self.label_transform(class_label)
-        if self.transform:
+        if self.transform and not self.no_img:
             img = self.transform(img)
 
         if self.use_attr:
@@ -829,7 +831,7 @@ class CUBDataset(Dataset):
                     one_hot_attr_label[np.arange(len(SELECTED_CONCEPTS)), attr_label] = 1
                     return one_hot_attr_label, class_label
                 else:
-                    return attr_label, class_label
+                    return torch.FloatTensor(attr_label), class_label
             else:
                 return img, class_label, torch.FloatTensor(attr_label)
         else:
@@ -896,6 +898,8 @@ def load_data(
     label_transform=None,
     path_transform=None,
     is_chexpert=False,
+    drop_last=False,
+    shuffle=False
 ):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
@@ -947,13 +951,8 @@ def load_data(
         concept_transform=concept_transform,
         label_transform=label_transform,
         path_transform=path_transform,
-    )
-    if is_training:
-        drop_last = True
-        shuffle = True
-    else:
-        drop_last = False
-        shuffle = False
+    )        
+        
     if resampling:
         sampler = StratifiedSampler(ImbalancedDatasetSampler(dataset), batch_size=batch_size)
         loader = DataLoader(dataset, batch_sampler=sampler, num_workers=num_workers)
