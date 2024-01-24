@@ -1,0 +1,34 @@
+program: protocbm/run_cub.py
+name: dknn-cub-beta-1
+method: grid
+parameters:
+  lr:
+    distribution: q_uniform
+    q: 5
+    min: 0.001
+    max: 0.1
+  dknn_tau:
+    distribution: q_uniform
+    q: 3
+    min: 0.1
+    max: 10.0
+  dknn_similarity:
+    distribution: categorical
+    values:
+      - cosine
+      - euclidean
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--cub_dir=../data/CUB200/" 
+  - "--pkl_dir=../data/CUB200/pkls/" 
+  - "--batch_size=4" 
+  - "--num_workers=4" 
+  - "--n_concepts=312" 
+  - "--x2c_arch=resnet50" 
+  - "--n_classes=200" 
+  - "--max_epochs=40" 
+  - "--tb_log_dir=../logs/protocbm/" 
+  - "--precision=16"
+  - ${args}

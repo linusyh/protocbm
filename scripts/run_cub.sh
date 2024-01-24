@@ -1,0 +1,13 @@
+python protocbm/run_cub.py \
+    --cub_dir ../data/CUB200/ \
+    --pkl_dir ../data/CUB200/pkls/ \
+    --batch_size 4 \
+    --num_workers 4 \
+    --n_concepts 312 \
+    --x2c_arch resnet50 \
+    --n_classes 200 \
+    --max_epochs 100 \
+    --tb_log_dir ../logs/protocbm/ \
+    --tags "bad" \
+    --lr 0.01 \
+    --epochs_proto_recompute 2
