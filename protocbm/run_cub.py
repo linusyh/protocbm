@@ -154,7 +154,7 @@ def main(
     if wandb_logger is not None:
         loggers.append(wandb_logger)
     
-    trainer = L.Trainer(max_epochs=max_epochs, logger=loggers, precision=precision)
+    trainer = L.Trainer(max_epochs=max_epochs, logger=loggers, precision=precision, num_sanity_val_steps=0)
     trainer.fit(protocbm_model, train_dl, val_dl)
     
 

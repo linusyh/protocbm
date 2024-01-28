@@ -25,6 +25,8 @@ def get_activation_fn(name="relu"):
         return torch.nn.SELU
     elif name == "tanh":
         return torch.nn.Tanh
+    elif name in ["none", "identity", None]:
+        return torch.nn.Identity
     else:
         raise ValueError(name)
 
@@ -62,7 +64,7 @@ class ProtoCBM(L.LightningModule, ABC):
             
         self.proto_loss_weight = proto_loss_weight
         self.concept_loss_weight = concept_loss_weight
-        self.concept_loss_fn = torch.nn.BCELoss()
+        self.concept_loss_fn = torch.nn.BCEWithLogitsLoss()
         
         self.lr = learning_rate
         self.momentum = momentum
@@ -72,7 +74,7 @@ class ProtoCBM(L.LightningModule, ABC):
         img_data, class_label, concept_label = batch
         return img_data, class_label, concept_label
         
-    def _prepare_prototypes(self):
+    def prepare_prototypes(self):
         print("Preparing prototypes")
         # compute a cache of concept activations as prototypes
         list_c_activations = []
@@ -82,7 +84,7 @@ class ProtoCBM(L.LightningModule, ABC):
             img_data, class_label, _ = self._process_batch(batch)
             
             with torch.no_grad():
-                c_activations = self.x2c_model(img_data.to(self.device))
+                c_activations = self.c_act(self.x2c_model(img_data.to(self.device)))
                 list_c_activations.append(c_activations)
                 list_cls_labels.append(class_label.to(self.device))
                 
@@ -97,8 +99,10 @@ class ProtoCBM(L.LightningModule, ABC):
         return hasattr(self, "proto_concepts") and hasattr(self, "proto_classes")
     
     def clear_prototypes(self):
-        delattr(self, "proto_concepts")
-        delattr(self, "proto_classes")
+        if hasattr(self, "proto_concepts"):
+            delattr(self, "proto_concepts")
+        if hasattr(self, "proto_classes"):
+            delattr(self, "proto_classes")
         
     @abstractmethod
     def _forward(self, batch, batch_idx, mask_prototype=False):
@@ -177,6 +181,7 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         dknn_method='deterministic',
         dknn_num_samples=-1,
         dknn_similarity='euclidean',
+        dknn_loss_type='minus_count',
         c_activation="sigmoid",
         momentum=0.9,
         learning_rate=0.01,
@@ -198,10 +203,12 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         self.dknn_method = dknn_method
         self.dknn_num_samples = dknn_num_samples
         self.dknn_simiarity = dknn_similarity
+        self.dknn_loss_type = dknn_loss_type
         
         self.n_classes = n_classes
         self.proto_model = DKNN(k=dknn_k,
                                 tau=dknn_tau,
+                                hard=False,
                                 method=dknn_method,
                                 num_samples=dknn_num_samples,
                                 similarity=dknn_similarity)
@@ -210,18 +217,23 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
                                      top_k=top_k_accuracy_c2y)
         
     def calculate_proto_loss(self, scores, query_y, neighbour_y):
-        query_y_one_hot = F.one_hot(query_y, self.n_classes)
-        neighbour_y_one_hot = F.one_hot(neighbour_y, self.n_classes)
-        
-        # top_k_ness = self.get_proto_model()(query_x, neighbour_x)  # (B*X, N*X) => (B, N)
+        query_y_one_hot = F.one_hot(query_y, self.n_classes)  # (B, C)
+        neighbour_y_one_hot = F.one_hot(neighbour_y, self.n_classes)  # (N, C)
         correct = (query_y_one_hot.unsqueeze(1) * neighbour_y_one_hot.unsqueeze(0)).sum(-1) # (B, N)
-        correct_in_top_k = (correct * scores).sum(-1)  # [B]
-        loss = -correct_in_top_k
+        
+        if self.dknn_loss_type == 'minus_count':
+            correct_in_top_k = (correct * scores).sum(-1)  # [B]
+            loss = -correct_in_top_k.mean()
+        elif self.dknn_loss_type == 'inverse_count':
+            correct_in_top_k = (correct * scores).sum(-1)  # [B]
+            loss = (1/correct_in_top_k).mean()
+        elif self.dknn_loss_type == 'bce':
+            loss = F.binary_cross_entropy_with_logits(scores, correct.to(scores.dtype))            
         
         accuracy = dknn_results_analysis(scores, neighbour_y, query_y, self.dknn_k)
         
         return {
-            "loss": loss.mean(), "accuracy": accuracy
+            "loss": loss, "accuracy": accuracy
         }
     
 class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
@@ -236,6 +248,7 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
         dknn_method='deterministic',
         dknn_num_samples=-1,
         dknn_similarity='euclidean',
+        dknn_loss_type='minus_count',
         c_activation="sigmoid",
         momentum=0.9,
         learning_rate=0.01,
@@ -251,6 +264,7 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
             dknn_method=dknn_method,
             dknn_num_samples=dknn_num_samples,
             dknn_similarity=dknn_similarity,
+            dknn_loss_type=dknn_loss_type,
             c_activation=c_activation,
             momentum=momentum,
             learning_rate=learning_rate,
@@ -262,21 +276,21 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
     def on_train_epoch_start(self) -> None:
         if self.training_stage == "c2y":
             if not self.has_prototypes():
-                self._prepare_prototypes()
+                self.prepare_prototypes()
                 
     def on_validation_epoch_start(self) -> None:
         if self.training_stage == "c2y":
             if not self.has_prototypes():
-                self._prepare_prototypes()
+                self.prepare_prototypes()
     
     def _forward(self, batch, batch_idx, mask_prototype=True, log_prefix=""):
         logging.debug("_forward")
         img_data, truth_y, truth_c = self._process_batch(batch)
         
         if self.training_stage == "x2c":
-            pred_c = self.x2c_model(img_data)
-            pred_c = self.c_act(pred_c)
-            x2c_loss = self.concept_loss_fn(pred_c, truth_c)
+            pred_c_logit = self.x2c_model(img_data)
+            pred_c = self.c_act(pred_c_logit)
+            x2c_loss = self.concept_loss_fn(pred_c_logit, truth_c)
             return {
                 "loss": x2c_loss,
                 "x2c_loss": x2c_loss,
@@ -298,8 +312,8 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
                 proto_x = self.proto_concepts
                 proto_y = self.proto_classes
             
-            pred_c = self.x2c_model(img_data)
-            pred_c = self.c_act(pred_c)
+            pred_c_logit = self.x2c_model(img_data)
+            pred_c = self.c_act(pred_c_logit)
             pred_y = self.proto_model(pred_c, proto_x)
             proto_results = self.calculate_proto_loss(pred_y, truth_y, proto_y)
             return {
@@ -321,14 +335,16 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         x2c_model=None,
         dknn_k=2,
         dknn_tau=1,
-        dknn_method='deterministic',
+        dknn_method="deterministic",
         dknn_num_samples=-1,
-        dknn_similarity='euclidean',
+        dknn_similarity="euclidean",
+        dknn_loss_type="minus_count",
         c_activation="sigmoid",
         epoch_proto_recompute=1,
         momentum=0.9,
         learning_rate=0.01,
-        weight_decay=4e-05,):
+        weight_decay=4e-05,
+        x2c_only_epochs=0):
         
         super().__init__(
             n_concepts=n_concepts,
@@ -341,6 +357,7 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
             dknn_method=dknn_method,
             dknn_num_samples=dknn_num_samples,
             dknn_similarity=dknn_similarity,
+            dknn_loss_type=dknn_loss_type,
             c_activation=c_activation,
             momentum=momentum,
             learning_rate=learning_rate,
@@ -349,19 +366,29 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         JointCBM.__init__(self)
         self.proto_dataloader = proto_train_dl
         self._epoch_counter = 0
-        self.epoch_proto_recompute = epoch_proto_recompute
+        self.epoch_proto_recompute = max(1, epoch_proto_recompute)
         self.save_hyperparameters()
+        self._x2c_only_epochs = max(0, x2c_only_epochs)
+    
+    def x2c_only(self):
+        return self._epoch_counter < self._x2c_only_epochs
             
     def _forward(self, batch, batch_idx, mask_prototype=True):
         logging.debug("_forward")
-        img_data, truth_y, truth_c = self._process_batch(batch)
+        x, truth_y, truth_c = self._process_batch(batch)
+        pred_c_logit = self.x2c_model(x)
+        pred_c = self.c_act(pred_c_logit)
+        x2c_loss = self.concept_loss_fn(pred_c_logit, truth_c)
         
+        if self.x2c_only():
+            return {
+                "x2c_loss": x2c_loss,
+                "loss": x2c_loss * self.concept_loss_weight
+            }
+            
         if not self.has_prototypes():
-            self._prepare_prototypes()
-        pred_c = self.c_act(self.x2c_model(img_data))
-        x2c_loss = self.concept_loss_fn(pred_c, truth_c)
+            self.prepare_prototypes()
         
-        # Masking identical samples from training set (only used for training)
         if mask_prototype:
             bsz = self.proto_dataloader.batch_size
             idx_start = batch_idx * bsz
