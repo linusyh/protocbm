@@ -64,6 +64,8 @@ def main(
     # dataloader settings
     cub_dir,
     pkl_dir,
+    concept_loss_weight: float = 1.0,
+    proto_loss_weight: float = 1.0,
     batch_size: int = 64,
     num_workers: int = 4,
     x2c_arch: str = "resnet50",
@@ -153,6 +155,8 @@ def main(
         n_concepts= n_concepts,
         n_classes=n_classes,
         x2c_model=x2c_model,
+        concept_loss_weight=concept_loss_weight,
+        proto_loss_weight=proto_loss_weight,
         dknn_k=dknn_k,
         dknn_tau=dknn_tau,
         dknn_method=dknn_method,
@@ -211,6 +215,9 @@ def parse_arguments():
     parser.add_argument("--n_classes", type=int, required=True)
     parser.add_argument("--x2c_arch", type=str, default="resnet50")
     parser.add_argument("--c_activation", type=str, default="sigmoid")
+    
+    parser.add_argument("--concept_loss_weight", type=float, default=1.0)
+    parser.add_argument("--proto_loss_weight", type=float, default=1.0)
     
     # DKNN settings
     parser.add_argument("--dknn_k", type=int, default=1)

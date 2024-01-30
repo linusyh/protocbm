@@ -1,6 +1,7 @@
 python protocbm/run_cub.py \
     --cub_dir ../data/CUB200/ \
     --pkl_dir ../data/CUB200/pkls/ \
+    --proto_loss_weight 1.0 \
     --batch_size 4 \
     --num_workers 0 \
     --n_concepts 312 \
