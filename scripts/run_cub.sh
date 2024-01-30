@@ -4,10 +4,18 @@ python protocbm/run_cub.py \
     --batch_size 4 \
     --num_workers 0 \
     --n_concepts 312 \
-    --x2c_arch resnet50 \
+    --x2c_arch resnet101 \
     --n_classes 200 \
     --max_epochs 100 \
     --tb_log_dir ../logs/protocbm/ \
-    --tags "COMMIT:9c03a6" \
-    --lr 0.001 \
-    --epochs_proto_recompute 2
+    --tags "DEBUG" \
+    --lr 0.0005 \
+    --epochs_proto_recompute 2 \
+    --plateau_lr_scheduler_enable \
+    --plateau_lr_scheduler_monitor val_c2y_acc \
+    --plateau_lr_scheduler_factor 0.2 \
+    --plateau_lr_scheduler_patience 3 \
+    --early_stop_enable \
+    --early_stop_monitor val_c2y_acc \
+    --early_stop_patience 10 \
+    --x2c_only_epochs 3 \

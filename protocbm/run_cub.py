@@ -8,6 +8,7 @@ import torchvision
 import lightning as L
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from cem.data.CUB200 import cub_loader
 from model import *
@@ -73,6 +74,8 @@ def main(
     dknn_method: str = "determinstic",
     dknn_num_samples: int = -1,
     dknn_similarity='euclidean',
+    dknn_loss_type='bce',
+    x2c_only_epochs: int = 0,
     epochs_proto_recompute: int = 1,
     # optimiser settings
     lr: float = 0.01,
@@ -80,13 +83,25 @@ def main(
     weight_decay = 0.0005,
     # trainer settings
     precision: int = 32,
-    max_epochs: int =20,
+    max_epochs: int = 20,
     # tensorboard settings
     tb_log_dir: str = None,
     tb_name: str = "porotcbm",
     # wandb logging
     wandb_logger: WandbLogger = None,
-    **kwargs
+    plateau_lr_scheduler_enable: bool = False,
+    plateau_lr_scheduler_monitor: str = "val_c2y_acc",
+    plateau_lr_scheduler_mode: str = "min",
+    plateau_lr_scheduler_patience: int = 10,
+    plateau_lr_scheduler_factor: float = 0.1,
+    plateau_lr_scheduler_min_lr: float = 1e-6,
+    plateau_lr_scheduler_threshold: float = 0.01,
+    plateau_lr_scheduler_cooldown: int = 0,
+    early_stop_enable: bool = True,
+    early_stop_monitor: str = "val_c2y_acc",
+    early_stop_mode: str = "max",
+    early_stop_patience: int =3,
+    **kwargs,
 ):  
     # dataset preparation
     cub_dir = Path(cub_dir)
@@ -126,11 +141,11 @@ def main(
                                     num_workers=num_workers,
                                     path_transform=path_transform)
     
-    print("=" * 10)
+    print("=" * 20)
     print("Train set size: ", len(train_dl.dataset))
     print("Test set size: ", len(test_dl.dataset))
     print("Val set size: ", len(val_dl.dataset))
-    print("=" * 10)
+    print("=" * 20)
     
     # model preparation
     x2c_model = construct_backbone(x2c_arch, pretrained=True, n_classes=n_concepts)
@@ -143,21 +158,45 @@ def main(
         dknn_method=dknn_method,
         dknn_num_samples=dknn_num_samples,
         dknn_similarity=dknn_similarity,
+        dknn_loss_type=dknn_loss_type,
         c_activation=c_activation,
         proto_train_dl=train_dl,
         learning_rate=lr,
         weight_decay=weight_decay,
         epoch_proto_recompute=epochs_proto_recompute,
+        x2c_only_epochs=x2c_only_epochs,
+        plateau_lr_scheduler_enable=plateau_lr_scheduler_enable,
+        plateau_lr_scheduler_monitor=plateau_lr_scheduler_monitor,
+        plateau_lr_scheduler_mode=plateau_lr_scheduler_mode,
+        plateau_lr_scheduler_patience=plateau_lr_scheduler_patience,
+        plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
+        plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
+        plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
+        plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown
     )
     
     loggers = [TensorBoardLogger(tb_log_dir, tb_name)]
     if wandb_logger is not None:
         loggers.append(wandb_logger)
     
-    trainer = L.Trainer(max_epochs=max_epochs, logger=loggers, precision=precision, num_sanity_val_steps=0)
+ 
+    callbacks = []
+    if early_stop_enable:
+        early_stop = EarlyStopping(monitor=early_stop_monitor,
+                                mode=early_stop_mode,
+                                patience=early_stop_patience,
+                                verbose=True)
+        callbacks.append(early_stop)
+    
+    
+    trainer = L.Trainer(max_epochs=max_epochs,
+                        logger=loggers, 
+                        precision=precision, 
+                        num_sanity_val_steps=0, 
+                        callbacks=callbacks)
     trainer.fit(protocbm_model, train_dl, val_dl)
     
-
+    
 def parse_arguments():
     parser = argparse.ArgumentParser()
     
@@ -179,12 +218,30 @@ def parse_arguments():
     parser.add_argument("--dknn_method", type=str, default="deterministic")
     parser.add_argument("--dknn_num_samples", type=int, default=-1)
     parser.add_argument("--dknn_similarity", type=str, default="euclidean")
+    parser.add_argument("--dknn_loss_type", type=str, default="bce", choices=["bce", "mse", "minus_count", "inverse_count"])
     parser.add_argument("--epochs_proto_recompute", type=int, default=1)
+    parser.add_argument("--x2c_only_epochs", type=int, default=0)
     
     # optimiser settings
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight_decay", type=float, default=0.0005)
+    
+    # plateau lr scheduler settings
+    parser.add_argument("--plateau_lr_scheduler_enable", action="store_true")
+    parser.add_argument("--plateau_lr_scheduler_monitor", type=str, default="val_c2y_acc")
+    parser.add_argument("--plateau_lr_scheduler_mode", type=str, default="max")
+    parser.add_argument("--plateau_lr_scheduler_patience", type=int, default=10)
+    parser.add_argument("--plateau_lr_scheduler_factor", type=float, default=0.1)
+    parser.add_argument("--plateau_lr_scheduler_min_lr", type=float, default=1e-6)
+    parser.add_argument("--plateau_lr_scheduler_threshold", type=float, default=0.01)
+    parser.add_argument("--plateau_lr_scheduler_cooldown", type=int, default=0)
+    
+    # early stop settings
+    parser.add_argument("--early_stop_enable", action="store_true")
+    parser.add_argument("--early_stop_monitor", type=str, default="val_c2y_acc")
+    parser.add_argument("--early_stop_mode", type=str, default="max")
+    parser.add_argument("--early_stop_patience", type=int, default=3)
     
     # train settings
     parser.add_argument("--max_epochs", type=int, default=20)
