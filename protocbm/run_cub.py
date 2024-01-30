@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import argparse
+import logging
 
 import wandb
 import torch
@@ -102,7 +103,8 @@ def main(
     early_stop_enable: bool = True,
     early_stop_monitor: str = "val_c2y_acc",
     early_stop_mode: str = "max",
-    early_stop_patience: int =3,
+    early_stop_patience: int = 3,
+    log_level: str = "INFO",
     **kwargs,
 ):  
     # dataset preparation
@@ -148,6 +150,9 @@ def main(
     print("Test set size: ", len(test_dl.dataset))
     print("Val set size: ", len(val_dl.dataset))
     print("=" * 20)
+    
+    # set logging level
+    logging.getLogger("lightning.pytorch").setLevel(log_level)
     
     # model preparation
     x2c_model = construct_backbone(x2c_arch, pretrained=True, n_classes=n_concepts)
