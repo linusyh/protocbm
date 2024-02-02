@@ -742,7 +742,8 @@ class CUBDataset(Dataset):
     Returns a compatible Torch Dataset object customized for the CUB dataset
     """
 
-    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, root_dir='../data/CUB200/', path_transform=None, transform=None, concept_transform=None, label_transform=None):
+    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, root_dir='../data/CUB200/', path_transform=None, transform=None, concept_transform=None, label_transform=None,
+                 use_cbm_concept_subset=False):
         """
         Arguments:
         pkl_file_paths: list of full path to all the pkl data
@@ -754,9 +755,7 @@ class CUBDataset(Dataset):
         transform: whether to apply any special transformation. Default = None, i.e. use standard ImageNet preprocessing
         """
         self.data = []
-        self.is_train = any(["train" in path for path in pkl_file_paths])
-        if not self.is_train:
-            assert any([("test" in path) or ("val" in path) for path in pkl_file_paths])
+        self.use_cbm_concept_subset = use_cbm_concept_subset
         for file_path in pkl_file_paths:
             self.data.extend(pickle.load(open(file_path, 'rb')))
         self.transform = transform
@@ -778,18 +777,12 @@ class CUBDataset(Dataset):
         img_path = img_data['img_path']
         if not self.no_img:
             if self.path_transform == None:
-                img_path = img_path.replace(
+                """img_path = img_path.replace(
                     '/juice/scr/scr102/scr/thaonguyen/CUB_supervision/datasets/',
                     '../data/CUB200/'
                 )
-                # Trim unnecessary paths
                 try:
                     idx = img_path.split('/').index('CUB_200_2011')
-                    # if self.image_dir != 'images':
-                    #     img_path = '/'.join([self.image_dir] + img_path.split('/')[idx+1:])
-                    #     img_path = img_path.replace('images/', '')
-                    # else:
-                    # img_path = self.root_dir + '/' + '/'.join(img_path.split('/')[idx:])
                     img_path = self.root_dir + '/'.join(img_path.split('/')[idx:])
                     print(img_path)
                     img = None
@@ -805,10 +798,11 @@ class CUBDataset(Dataset):
                     img_path_split = img_path.split('/')
                     split = 'train' if self.is_train else 'test'
                     img_path = '/'.join(img_path_split[:2] + [split] + img_path_split[2:])
-                    img = Image.open(img_path).convert('RGB')
+                    img = Image.open(img_path).convert('RGB')"""
+                img_path = self.root_dir + img_path
             else:
                 img_path = self.path_transform(img_path)
-                img = Image.open(img_path).convert('RGB')
+            img = Image.open(img_path).convert('RGB')
 
         class_label = img_data['class_label']
         if self.label_transform:
@@ -821,17 +815,22 @@ class CUBDataset(Dataset):
                 attr_label = img_data['uncertain_attribute_label']
             else:
                 attr_label = img_data['attribute_label']
+                
+            if self.use_cbm_concept_subset:
+                attr_label = [attr_label[c] for c in SELECTED_CONCEPTS]
+        
             if self.concept_transform is not None:
                 attr_label = self.concept_transform(attr_label)
             if self.no_img:
-                if self.n_class_attr == 3:
-                    one_hot_attr_label = np.zeros(
-                        (len(SELECTED_CONCEPTS), self.n_class_attr)
-                    )
-                    one_hot_attr_label[np.arange(len(SELECTED_CONCEPTS)), attr_label] = 1
-                    return one_hot_attr_label, class_label
-                else:
-                    return torch.FloatTensor(attr_label), class_label
+                # if self.n_class_attr == 3:
+                #     one_hot_attr_label = np.zeros(
+                #         (len(SELECTED_CONCEPTS), self.n_class_attr)
+                #     )
+                #     one_hot_attr_label[np.arange(len(SELECTED_CONCEPTS)), attr_label] = 1
+                #     return one_hot_attr_label, class_label
+                # else:
+                # 
+                return torch.FloatTensor(attr_label), class_label
             else:
                 return img, class_label, torch.FloatTensor(attr_label)
         else:
@@ -899,7 +898,9 @@ def load_data(
     path_transform=None,
     is_chexpert=False,
     drop_last=False,
-    shuffle=False
+    shuffle=False,
+    is_training=False,
+    use_cbm_concept_subset=False,
 ):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
@@ -909,7 +910,6 @@ def load_data(
     sampler.py if necessary
     """
     resized_resol = int(resol * 256/224)
-    is_training = any(['train.pkl' in f for f in pkl_paths])
     if is_training:
         if is_chexpert:
             transform = transforms.Compose([
@@ -951,6 +951,7 @@ def load_data(
         concept_transform=concept_transform,
         label_transform=label_transform,
         path_transform=path_transform,
+        use_cbm_concept_subset=use_cbm_concept_subset,
     )        
         
     if resampling:

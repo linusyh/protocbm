@@ -12,8 +12,8 @@ from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from cem.data.CUB200 import cub_loader
-from model import *
-from _config import *
+from protocbm.model import *
+from protocbm._config import *
 
 def create_wandb_logger(args):
     wandb_logger = WandbLogger(
@@ -33,17 +33,16 @@ def create_wandb_logger(args):
 def construct_backbone(arch, n_classes, pretrained=True):
     arch = arch.lower().strip()
     if arch.startswith("resnet"):
-        if arch == "resnet50":
+        if arch == "resnet18":
+            backbone = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT if pretrained else None)
+        elif arch == "resnet34":
+            backbone = torchvision.models.resnet34(weights=torchvision.models.ResNet34_Weights.DEFAULT if pretrained else None)
+        elif arch == "resnet50":
             backbone = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT if pretrained else None)
         elif arch == "resnet101":
             backbone = torchvision.models.resnet101(weights=torchvision.models.ResNet101_Weights.DEFAULT if pretrained else None)
         elif arch == "resnet152":
             backbone = torchvision.models.resnet152(weights=torchvision.models.ResNet152_Weights.DEFAULT if pretrained else None)
-        elif arch == "resnet18":
-            backbone = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT if pretrained else None)
-        elif arch == "resnet34":
-            backbone = torchvision.models.resnet34(weights=torchvision.models.ResNet34_Weights.DEFAULT if pretrained else None)
-        
         backbone.fc = torch.nn.Linear(backbone.fc.in_features, n_classes)        
     elif arch.startswith("efficientnet-v2"):
         if arch == "efficientnet-v2-s":
@@ -65,10 +64,12 @@ def main(
     # dataloader settings
     cub_dir,
     pkl_dir,
-    concept_loss_weight: float = 1.0,
-    proto_loss_weight: float = 1.0,
     batch_size: int = 64,
     num_workers: int = 4,
+    use_cbm_concept_subset: bool = False,
+    # model settings
+    concept_loss_weight: float = 1.0,
+    proto_loss_weight: float = 1.0,
     x2c_arch: str = "resnet50",
     c_activation="sigmoid",
     # DKNN settings
@@ -127,7 +128,9 @@ def main(
                                     root_dir=cub_dir,
                                     batch_size=batch_size,
                                     num_workers=num_workers,
-                                    path_transform=path_transform)
+                                    path_transform=path_transform,
+                                    is_training=True,
+                                    use_cbm_concept_subset=use_cbm_concept_subset)
     
     test_dl = cub_loader.load_data([test_pkl],
                                     use_attr=True,
@@ -135,7 +138,9 @@ def main(
                                     root_dir=cub_dir,
                                     batch_size=batch_size,
                                     num_workers=num_workers,
-                                    path_transform=path_transform)
+                                    path_transform=path_transform,
+                                    is_training=False,
+                                    use_cbm_concept_subset=use_cbm_concept_subset)
     
     val_dl = cub_loader.load_data([val_pkl],
                                     use_attr=True,
@@ -143,7 +148,9 @@ def main(
                                     root_dir=cub_dir,
                                     batch_size=batch_size,
                                     num_workers=num_workers,
-                                    path_transform=path_transform)
+                                    path_transform=path_transform,
+                                    is_training=False,
+                                    use_cbm_concept_subset=use_cbm_concept_subset)
     
     print("=" * 20)
     print("Train set size: ", len(train_dl.dataset))
@@ -214,7 +221,7 @@ def parse_arguments():
     parser.add_argument("--pkl_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--num_workers", type=int, default=4)
-    
+    parser.add_argument("--use_cbm_concept_subset", action="store_true")
     # model settings
     parser.add_argument("--n_concepts", type=int, required=True)
     parser.add_argument("--n_classes", type=int, required=True)
@@ -283,6 +290,7 @@ def parse_arguments():
                         dest='disable_wandb',
                         help='True if you dont want to crete wandb logs.')
     parser.set_defaults(disable_wandb=False)
+    
     
     args = parser.parse_args()
     return args
