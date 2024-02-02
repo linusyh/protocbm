@@ -137,3 +137,6 @@ dmypy.json
 
 # Wandb files
 wandb/
+
+# scripts
+scripts/
