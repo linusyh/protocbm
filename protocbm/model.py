@@ -155,7 +155,8 @@ class ProtoCBM(L.LightningModule, ABC):
                                                                         min_lr=self.plateau_lr_scheduler_min_lr,
                                                                         threshold=self.plateau_lr_scheduler_threshold,
                                                                         cooldown=self.plateau_lr_scheduler_cooldown,),
-                "monitor": self.plateau_lr_scheduler_monitor
+                "monitor": self.plateau_lr_scheduler_monitor,
+                "strict": False,
             }
         return objects
     

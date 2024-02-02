@@ -199,9 +199,10 @@ def main(
     callbacks = []
     if early_stop_enable:
         early_stop = EarlyStopping(monitor=early_stop_monitor,
-                                mode=early_stop_mode,
-                                patience=early_stop_patience,
-                                verbose=True)
+                                   mode=early_stop_mode,
+                                   patience=early_stop_patience,
+                                   verbose=True,
+                                   strict=False)
         callbacks.append(early_stop)
     
     
