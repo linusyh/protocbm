@@ -255,9 +255,6 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
                                 method=dknn_method,
                                 num_samples=dknn_num_samples,
                                 similarity=dknn_similarity)
-        self.accuracy_c2y = Accuracy(task="multiclass",
-                                     num_classes=n_classes,
-                                     top_k=top_k_accuracy_c2y)
         
     def calculate_proto_loss(self, scores, query_y, neighbour_y):
         query_y_one_hot = F.one_hot(query_y, self.n_classes)  # (B, C)
@@ -277,11 +274,10 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         else:
             raise ValueError(f"Unknown dknn_loss_type: {self.dknn_loss_type}")
         
-        accuracy = dknn_results_analysis(scores, neighbour_y, query_y, self.dknn_k)
+        results = dknn_results_analysis(scores, neighbour_y, query_y, self.dknn_k)
+        results['loss'] = loss
         
-        return {
-            "loss": loss, "accuracy": accuracy
-        }
+        return results
     
 class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
     def __init__(self,
@@ -383,7 +379,8 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
             return {
                 "loss": proto_results['loss'],
                 "c2y_loss": proto_results['loss'],
-                "c2y_acc": proto_results['accuracy']
+                "c2y_acc": proto_results['neighbour_accuracy'],
+                "c2y_acc_cls": proto_results['class_accuracy']
             }
         else:
             raise ValueError(self.training_stage)
@@ -490,10 +487,10 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
             self.proto_loss_weight * proto_results['loss']
         
         return {
+            "loss": loss,
             "x2c_loss": x2c_loss,
-            "c2y_loss": proto_results['loss'],
-            "c2y_acc": proto_results['accuracy'],
-            "loss": loss
+            "c2y_acc": proto_results['neighbour_accuracy'],
+            "c2y_acc_cls": proto_results['class_accuracy']
         }
         
     def on_train_epoch_end(self) -> None:

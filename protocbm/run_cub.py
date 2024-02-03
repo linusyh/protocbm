@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-import argparse
+import argparse 
 import logging
 
 import wandb
@@ -88,6 +88,7 @@ def main(
     # trainer settings
     precision: int = 32,
     max_epochs: int = 20,
+    profiler: str = None,
     # tensorboard settings
     tb_log_dir: str = None,
     tb_name: str = "porotcbm",
@@ -210,7 +211,8 @@ def main(
                         logger=loggers, 
                         precision=precision, 
                         num_sanity_val_steps=0, 
-                        callbacks=callbacks)
+                        callbacks=callbacks,
+                        profiler=profiler)
     trainer.fit(protocbm_model, train_dl, val_dl)
     
     
@@ -266,6 +268,7 @@ def parse_arguments():
     # train settings
     parser.add_argument("--max_epochs", type=int, default=20)
     parser.add_argument("--precision", type=int, default=32)
+    parser.add_argument("--profiler", type=str, default=None)
     
     # tensorboard settings
     parser.add_argument("--tb_log_dir", type=str, default=None)
@@ -299,6 +302,7 @@ def parse_arguments():
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('medium')
+    L.seed_everything(773)
     
     args = parse_arguments()
     if not args.disable_wandb:

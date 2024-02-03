@@ -11,6 +11,7 @@ whether each neighbor is actually one of the k closest to each query.
 import torch
 import torch.nn.functional as F
 import lightning as L
+import numpy as np
 
 from proto_models.dknn.neuralsort import NeuralSort
 from proto_models.dknn.pl import PL
@@ -129,9 +130,9 @@ def dknn_loss_warp_one_hot(dknn_layer, query, neighbors, query_label, neighbor_l
                      neighbor_labels=F.one_hot(neighbor_labels, num_classes),
                      method=method
     )
-    
-    
-def dknn_results_analysis(dknn_output, neighbour_label, target_label, k):
+
+
+def dknn_cal_neighbour_accuracy(dknn_output, neighbour_label, target_label, k):
     with torch.no_grad():
         total_neighbours = 0
         correct_neighbours = 0
@@ -143,3 +144,33 @@ def dknn_results_analysis(dknn_output, neighbour_label, target_label, k):
             correct_neighbours += (neighbours == label).sum().item()
         
         return correct_neighbours / total_neighbours
+
+
+def dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k):
+    dknn_output = dknn_output.detach().cpu().numpy()
+    neighbour_label = neighbour_label.detach().cpu().numpy()
+    target_label = target_label.detach().cpu().numpy()
+    
+    accuracies = []
+    
+    for pred, label in zip(dknn_output, target_label):
+        top_k_idx = np.argpartition(pred, -k)[-k:]
+        top_k_labels = neighbour_label[top_k_idx]
+        uniques, counts = np.unique(top_k_labels, return_counts=True)
+        if label in uniques:
+            idx = np.where(uniques == label)
+            label_count = counts[idx]
+            if counts.max() == label_count:
+                accuracies.append(1 / (counts==label_count).sum())
+        
+        accuracies.append(0)
+    
+    return np.mean(accuracies)
+    
+def dknn_results_analysis(dknn_output, neighbour_label, target_label, k):
+    class_acc = dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k)
+    neighbour_acc = dknn_cal_neighbour_accuracy(dknn_output, neighbour_label, target_label, k)
+    return {
+        "class_accuracy": class_acc,
+        "neighbour_accuracy": neighbour_acc
+    }
