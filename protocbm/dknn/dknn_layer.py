@@ -10,54 +10,67 @@ whether each neighbor is actually one of the k closest to each query.
 
 import torch
 import torch.nn.functional as F
-import lightning as L
 import numpy as np
 
-from proto_models.dknn.neuralsort import NeuralSort
-from proto_models.dknn.pl import PL
+from protocbm.dknn.neuralsort import NeuralSort
+from protocbm.dknn.pl import PL
 
 
-class DKNNClassifier(L.LightningModule):    
-    def __init__(self,
-                 num_classes: int,
-                 prototype_feature: torch.Tensor,
-                 prototype_label: torch.Tensor,
-                 optim_cls=torch.optim.Adam,
-                 optim_params={},
-                 *args,
-                 **kwargs):
-        super().__init__()
-        self.num_classes = num_classes
-        self.prototype_feature = prototype_feature
-        self.prototype_label = prototype_label
-        self.optim_cls = optim_cls
-        self.optim_params = optim_params
-        
-        self.dknn = DKNN(*args, **kwargs)
+class DKNNLossSparseWeighted(torch.nn.Module):
+    def __init__(self, positive_weight=1.0, negative_weight=1.0):
+        super(DKNNLossSparseWeighted, self).__init__()
+        self.positive_weight = positive_weight
+        self.negative_weight = negative_weight
     
-    def has_prototype(self):
-        return self.prototype_feature is not None and self.prototype_label is not None
+    def forward(self, dknn_output, truth):
+        is_positive = truth.sum()
+        amplification = torch.where(truth==1, 
+                                    self.positive_weight * -1 / is_positive,
+                                    self.negative_weight / (dknn_output.nelement()-is_positive))
+        return (dknn_output * amplification).sum()
     
-    def configure_optimizers(self):
-        optimiser = self.optim_cls(self.dknn.parameters(), **self.optim_params)
-        return dict(optimizer=optimiser)
+
+class DKNNLoss(torch.nn.Module):
+    def __init__(self):
+        super(DKNNLoss, self).__init__()
     
-    def on_train_epoch_start(self):
-        if self.has_prototype():
-            self.prototype_feature = self.prototype_feature.to(self.device)
-            self.prototype_label = self.prototype_label.to(self.device)
+    def forward(self, dknn_output, truth):
+        return -(dknn_output * truth).sum()
+
+
+class DKNNInverseLoss(torch.nn.Module):
+    def __init__(self):
+        super(DKNNInverseLoss, self).__init__()
     
-    def training_step(self, batch, batch_idx):
-        x, truth_y = batch
-        
-        loss = dknn_loss_warp_one_hot(self.dknn,
-                                      query=x,
-                                      neighbors=self.prototype_feature,
-                                      query_label=truth_y,
-                                      neighbor_labels=self.prototype_label,
-                                      method=self.dknn.method)
-        self.log('train_loss', loss, on_epoch=True, prog_bar=True)
-        return loss
+    def forward(self, dknn_output, truth):
+        return (1/(dknn_output * truth)).sum()
+
+
+DKNN_LOSS_LOOKUP = {
+    "minus_count": DKNNLoss,
+    "inverse_count": DKNNInverseLoss,
+    "sparse_weighted": DKNNLossSparseWeighted,
+    "bce": torch.nn.BCEWithLogitsLoss,
+    "mse": torch.nn.MSELoss
+}
+
+def dknn_loss_factory(loss_str: str) -> torch.nn.Module:
+    loss_str = loss_str.strip().lower()
+    if loss_str in DKNN_LOSS_LOOKUP.keys():
+        return DKNN_LOSS_LOOKUP[loss_str]()
+    elif loss_str.startswith("sparse_weighted"):
+        parts = loss_str.split("_")
+        if len(parts) == 3:
+            positive_weight = float(parts[2])
+            return DKNNLossSparseWeighted(positive_weight=positive_weight)
+        elif len(parts) == 4:
+            positive_weight = float(parts[2])
+            negative_weight = float(parts[3])
+            return DKNNLossSparseWeighted(positive_weight=positive_weight, negative_weight=negative_weight)
+        else:
+            raise ValueError(f"Invalid sparse_weighted loss function: {loss_str}")
+    else:
+        raise ValueError(f"Unknown loss function: {loss_str}")
 
 
 class DKNN(torch.nn.Module):

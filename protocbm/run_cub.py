@@ -240,7 +240,7 @@ def parse_arguments():
     parser.add_argument("--dknn_method", type=str, default="deterministic")
     parser.add_argument("--dknn_num_samples", type=int, default=-1)
     parser.add_argument("--dknn_similarity", type=str, default="euclidean")
-    parser.add_argument("--dknn_loss_type", type=str, default="bce", choices=["bce", "mse", "minus_count", "inverse_count"])
+    parser.add_argument("--dknn_loss_type", type=str, default="bce")
     parser.add_argument("--epochs_proto_recompute", type=int, default=1)
     parser.add_argument("--x2c_only_epochs", type=int, default=0)
     

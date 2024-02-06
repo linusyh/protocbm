@@ -9,7 +9,7 @@ from torchvision.models import resnet50, ResNet50_Weights
 from torchmetrics import Accuracy
 import lightning as L
 
-from proto_models.dknn.dknn_layer import *
+from protocbm.dknn.dknn_layer import *
 from tqdm import tqdm
 
 
@@ -248,6 +248,9 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         self.dknn_simiarity = dknn_similarity
         self.dknn_loss_type = dknn_loss_type
         
+        self.dknn_loss_function = dknn_loss_factory(dknn_loss_type)
+
+        
         self.n_classes = n_classes
         self.proto_model = DKNN(k=dknn_k,
                                 tau=dknn_tau,
@@ -261,18 +264,7 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         neighbour_y_one_hot = F.one_hot(neighbour_y, self.n_classes)  # (N, C)
         correct = (query_y_one_hot.unsqueeze(1) * neighbour_y_one_hot.unsqueeze(0)).sum(-1) # (B, N)
         
-        if self.dknn_loss_type == 'minus_count':
-            correct_in_top_k = (correct * scores).sum(-1)  # [B]
-            loss = -correct_in_top_k.mean()
-        elif self.dknn_loss_type == 'inverse_count':
-            correct_in_top_k = (correct * scores).sum(-1)  # [B]
-            loss = (1/correct_in_top_k).mean()
-        elif self.dknn_loss_type == 'bce':
-            loss = F.binary_cross_entropy_with_logits(scores, correct.to(scores.dtype))
-        elif self.dknn_loss_type == 'mse':
-            loss = F.mse_loss(scores, correct.to(scores.dtype))
-        else:
-            raise ValueError(f"Unknown dknn_loss_type: {self.dknn_loss_type}")
+        loss = self.dknn_loss_function(scores, correct)
         
         results = dknn_results_analysis(scores, neighbour_y, query_y, self.dknn_k)
         results['loss'] = loss
