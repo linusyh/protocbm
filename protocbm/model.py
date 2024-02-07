@@ -246,10 +246,10 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         self.dknn_method = dknn_method
         self.dknn_num_samples = dknn_num_samples
         self.dknn_simiarity = dknn_similarity
-        self.dknn_loss_type = dknn_loss_type
-        
+        self.dknn_loss_type = dknn_loss_type        
         self.dknn_loss_function = dknn_loss_factory(dknn_loss_type)
 
+        self.x2c_accuracy = Accuracy("binary")
         
         self.n_classes = n_classes
         self.proto_model = DKNN(k=dknn_k,
@@ -262,7 +262,7 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
     def calculate_proto_loss(self, scores, query_y, neighbour_y):
         query_y_one_hot = F.one_hot(query_y, self.n_classes)  # (B, C)
         neighbour_y_one_hot = F.one_hot(neighbour_y, self.n_classes)  # (N, C)
-        correct = (query_y_one_hot.unsqueeze(1) * neighbour_y_one_hot.unsqueeze(0)).sum(-1) # (B, N)
+        correct = (query_y_one_hot.unsqueeze(1) * neighbour_y_one_hot.unsqueeze(0)).sum(-1).float() # (B, N)
         
         loss = self.dknn_loss_function(scores, correct)
         
@@ -342,10 +342,13 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
         if self.training_stage == "x2c":
             pred_c_logit = self.x2c_model(img_data)
             pred_c = self.c_act(pred_c_logit)
+            pred_c_scores = F.sigmoid(pred_c_logit)
             x2c_loss = self.concept_loss_fn(pred_c_logit, truth_c)
+            x2c_accuracy = self.x2c_accuracy(pred_c_scores, truth_c)            
             return {
                 "loss": x2c_loss,
                 "x2c_loss": x2c_loss,
+                "x2c_acc": x2c_accuracy
             }
         elif self.training_stage == "c2y":
             assert self.has_prototypes()
@@ -447,12 +450,15 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         x, truth_y, truth_c = self._process_batch(batch)
         pred_c_logit = self.x2c_model(x)
         pred_c = self.c_act(pred_c_logit)
+        pred_c_scores = F.sigmoid(pred_c_logit)
         x2c_loss = self.concept_loss_fn(pred_c_logit, truth_c)
+        x2c_accuracy = self.x2c_accuracy(pred_c_scores, truth_c)
         
         if self.x2c_only():
             return {
+                "loss": x2c_loss * self.concept_loss_weight,
                 "x2c_loss": x2c_loss,
-                "loss": x2c_loss * self.concept_loss_weight
+                "x2c_acc": x2c_accuracy,
             }
             
         if not self.has_prototypes():
@@ -479,10 +485,12 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
             self.proto_loss_weight * proto_results['loss']
         
         return {
-            "loss": loss,
-            "x2c_loss": x2c_loss,
-            "c2y_acc": proto_results['neighbour_accuracy'],
-            "c2y_acc_cls": proto_results['class_accuracy']
+            "loss":         loss,
+            "x2c_loss":     x2c_loss,
+            "x2c_acc":      x2c_accuracy,
+            "c2y_loss":     proto_results['loss'],
+            "c2y_acc":      proto_results['neighbour_accuracy'],
+            "c2y_acc_cls":  proto_results['class_accuracy']
         }
         
     def on_train_epoch_end(self) -> None:
