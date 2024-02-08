@@ -33,7 +33,9 @@ def get_activation_fn(name="relu"):
 def get_optimiser(name: str):
     lookup = {
         "sgd": torch.optim.SGD,
-        "adam": torch.optim.Adam
+        "adam": torch.optim.Adam,
+        "adamw": torch.optim.AdamW,
+        "adamax": torch.optim.Adamax,
     }
     return lookup.get(name.lower(), torch.optim.Adam)
         
@@ -439,8 +441,8 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         self.proto_dataloader = proto_train_dl
         self._epoch_counter = 0
         self.epoch_proto_recompute = max(1, epoch_proto_recompute)
-        self.save_hyperparameters(ignore=["proto_dataloader", "x2c_model"])
         self._x2c_only_epochs = max(0, x2c_only_epochs)
+        self.save_hyperparameters(ignore=["proto_train_dl", "x2c_model"])
     
     def x2c_only(self):
         return self._epoch_counter < self._x2c_only_epochs

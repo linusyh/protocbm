@@ -15,6 +15,82 @@ from cem.data.CUB200 import cub_loader
 from protocbm.model import *
 from protocbm._config import *
 
+
+class ConceptModel(L.LightningModule):
+    def __init__(self, 
+                 x2c_model: torch.nn.Module,
+                 optimiser: str                         = "adam",
+                 lr: float                              = 1e-5,
+                 weight_decay: float                    = 0.0,
+                 plateau_lr_scheduler_enable: bool      = False,
+                 plateau_lr_scheduler_monitor: str      = "val_x2c_acc",
+                 plateau_lr_scheduler_mode: str         = "min",
+                 plateau_lr_scheduler_patience: int     = 10,
+                 plateau_lr_scheduler_factor: float     = 0.1,
+                 plateau_lr_scheduler_min_lr: float     = 1e-6,
+                 plateau_lr_scheduler_threshold: float  = 0.01,
+                 plateau_lr_scheduler_cooldown: int     = 0):
+        super().__init__()
+        self.x2c_model = x2c_model
+        self.optimiser = optimiser
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.plateau_lr_scheduler_enable = plateau_lr_scheduler_enable
+        self.plateau_lr_scheduler_monitor = plateau_lr_scheduler_monitor
+        self.plateau_lr_scheduler_mode = plateau_lr_scheduler_mode
+        self.plateau_lr_scheduler_patience = plateau_lr_scheduler_patience
+        self.plateau_lr_scheduler_factor = plateau_lr_scheduler_factor
+        self.plateau_lr_scheduler_min_lr = plateau_lr_scheduler_min_lr
+        self.plateau_lr_scheduler_threshold = plateau_lr_scheduler_threshold
+        self.plateau_lr_scheduler_cooldown = plateau_lr_scheduler_cooldown
+        self.accuracy = Accuracy("binary")
+        self.save_hyperparameters()
+        
+    def training_step(self, batch, batch_idx):
+        x, _, c = batch
+        x2c_output = self.x2c_model(x)
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(x2c_output, c)
+        acc = self.accuracy(x2c_output, c)
+        self.log("train_acc", acc, on_step=True, on_epoch=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True)
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        x, _, c = batch
+        x2c_output = self.x2c_model(x)
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(x2c_output, c)
+        acc = self.accuracy(x2c_output, c)
+        self.log("val_acc", acc, on_step=True, on_epoch=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True)
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        x, _, c = batch
+        x2c_output = self.x2c_model(x)
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(x2c_output, c)
+        acc = self.accuracy(x2c_output, c)
+        self.log("test_acc", acc, on_step=True, on_epoch=True)
+        self.log("test_loss", loss, on_step=True, on_epoch=True)
+        return loss
+    
+    def configure_optimizers(self):
+        objects = {}
+        objects['optimizer'] = get_optimiser(self.optimiser)(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        if self.plateau_lr_scheduler_enable:
+            objects['lr_scheduler'] = {
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(objects['optimizer'],
+                                                                        mode=self.plateau_lr_scheduler_mode,
+                                                                        patience=self.plateau_lr_scheduler_patience,
+                                                                        factor=self.plateau_lr_scheduler_factor,
+                                                                        min_lr=self.plateau_lr_scheduler_min_lr,
+                                                                        threshold=self.plateau_lr_scheduler_threshold,
+                                                                        cooldown=self.plateau_lr_scheduler_cooldown,),
+                "monitor": self.plateau_lr_scheduler_monitor,
+                "strict": False,
+            }
+        return objects
+
+
 def create_wandb_logger(args):
     wandb_logger = WandbLogger(
         project=WANDB_PROJECT,
@@ -60,7 +136,6 @@ def construct_backbone(arch, n_classes, pretrained=True):
 
 def main(
     n_concepts: int,
-    n_classes: int,
     # dataloader settings
     cub_dir,
     pkl_dir,
@@ -68,19 +143,9 @@ def main(
     num_workers: int = 4,
     use_cbm_concept_subset: bool = False,
     # model settings
-    concept_loss_weight: float = 1.0,
-    proto_loss_weight: float = 1.0,
+    optimiser: str = "adam",
     x2c_arch: str = "resnet50",
-    c_activation="sigmoid",
     # DKNN settings
-    dknn_k: int = 1,
-    dknn_tau: float = 1.0,
-    dknn_method: str = "determinstic",
-    dknn_num_samples: int = -1,
-    dknn_similarity='euclidean',
-    dknn_loss_type='bce',
-    x2c_only_epochs: int = 0,
-    epochs_proto_recompute: int = 1,
     # optimiser settings
     lr: float = 0.01,
     weight_decay = 0.0005,
@@ -94,7 +159,7 @@ def main(
     # wandb logging
     wandb_logger: WandbLogger = None,
     plateau_lr_scheduler_enable: bool = False,
-    plateau_lr_scheduler_monitor: str = "val_c2y_acc",
+    plateau_lr_scheduler_monitor: str = "val_x2c_acc",
     plateau_lr_scheduler_mode: str = "min",
     plateau_lr_scheduler_patience: int = 10,
     plateau_lr_scheduler_factor: float = 0.1,
@@ -102,12 +167,13 @@ def main(
     plateau_lr_scheduler_threshold: float = 0.01,
     plateau_lr_scheduler_cooldown: int = 0,
     early_stop_enable: bool = True,
-    early_stop_monitor: str = "val_c2y_acc",
+    early_stop_monitor: str = "val_x2c_acc",
     early_stop_mode: str = "max",
     early_stop_patience: int = 3,
     log_level: str = "INFO",
     checkpoint_dir: str = None,
     checkpoint_name: str = None,
+    checkpoint_monitor: str = None,
     checkpoint_n_epochs: int = None,
     **kwargs,
 ):  
@@ -166,40 +232,19 @@ def main(
     
     # model preparation
     x2c_model = construct_backbone(x2c_arch, pretrained=True, n_classes=n_concepts)
-    protocbm_model = ProtoCBMDKNNJoint(
-        n_concepts= n_concepts,
-        n_classes=n_classes,
-        x2c_model=x2c_model,
-        concept_loss_weight=concept_loss_weight,
-        proto_loss_weight=proto_loss_weight,
-        dknn_k=dknn_k,
-        dknn_tau=dknn_tau,
-        dknn_method=dknn_method,
-        dknn_num_samples=dknn_num_samples,
-        dknn_similarity=dknn_similarity,
-        dknn_loss_type=dknn_loss_type,
-        c_activation=c_activation,
-        proto_train_dl=train_dl,
-        learning_rate=lr,
-        weight_decay=weight_decay,
-        epoch_proto_recompute=epochs_proto_recompute,
-        x2c_only_epochs=x2c_only_epochs,
-        plateau_lr_scheduler_enable=plateau_lr_scheduler_enable,
-        plateau_lr_scheduler_monitor=plateau_lr_scheduler_monitor,
-        plateau_lr_scheduler_mode=plateau_lr_scheduler_mode,
-        plateau_lr_scheduler_patience=plateau_lr_scheduler_patience,
-        plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
-        plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
-        plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
-        plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown
-    )
-    
-    loggers = [TensorBoardLogger(tb_log_dir, tb_name)]
-    if wandb_logger is not None:
-        loggers.append(wandb_logger)
-    
+    model = ConceptModel(x2c_model,
+                         optimiser=optimiser,
+                         lr=lr,
+                         weight_decay=weight_decay,
+                         plateau_lr_scheduler_enable=plateau_lr_scheduler_enable,
+                         plateau_lr_scheduler_monitor=plateau_lr_scheduler_monitor,
+                         plateau_lr_scheduler_mode=plateau_lr_scheduler_mode,
+                         plateau_lr_scheduler_patience=plateau_lr_scheduler_patience,
+                         plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
+                         plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
+                         plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
+                         plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown)
  
-    # Careate callbacks
     callbacks = []
     if early_stop_enable:
         early_stop = EarlyStopping(monitor=early_stop_monitor,
@@ -208,16 +253,17 @@ def main(
                                    verbose=True,
                                    strict=False)
         callbacks.append(early_stop)
-    
+        
     if checkpoint_dir is not None:
-        checkpoint_dir = Path(checkpoint_dir)
-        checkpoint = pl.callbacks.ModelCheckpoint(
-            dirpath=checkpoint_dir,
-            filename=checkpoint_name,
-            every_n_epochs=checkpoint_n_epochs,
-        )
-        callbacks.append(checkpoint)
+        checkpoint_cb = pl.callbacks.ModelCheckpoint(dirpath=checkpoint_dir,
+                                                     filename=checkpoint_name,
+                                                     monitor=checkpoint_monitor,
+                                                     every_n_epochs=checkpoint_n_epochs,)
+        callbacks.append(checkpoint_cb)
     
+    loggers = [TensorBoardLogger(tb_log_dir, tb_name)]
+    if wandb_logger is not None:
+        loggers.append(wandb_logger)
     
     trainer = L.Trainer(max_epochs=max_epochs,
                         logger=loggers, 
@@ -225,11 +271,11 @@ def main(
                         num_sanity_val_steps=0, 
                         callbacks=callbacks,
                         profiler=profiler)
-    trainer.fit(protocbm_model, train_dl, val_dl)
+    trainer.fit(model, train_dl, val_dl)
+    trainer.test(model, test_dl)
     
     
 def parse_arguments():
-    DEFAULT_MONITOR = "val_c2y_acc_cls"
     parser = argparse.ArgumentParser()
     
     # dataset settings
@@ -237,34 +283,18 @@ def parse_arguments():
     parser.add_argument("--pkl_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--use_cbm_concept_subset", action="store_true")
     # model settings
     parser.add_argument("--n_concepts", type=int, required=True)
-    parser.add_argument("--n_classes", type=int, required=True)
     parser.add_argument("--x2c_arch", type=str, default="resnet50")
-    parser.add_argument("--c_activation", type=str, default="sigmoid")
-    
-    parser.add_argument("--concept_loss_weight", type=float, default=1.0)
-    parser.add_argument("--proto_loss_weight", type=float, default=1.0)
-    
-    # DKNN settings
-    parser.add_argument("--dknn_k", type=int, default=1)
-    parser.add_argument("--dknn_tau", type=float, default=1.0)
-    parser.add_argument("--dknn_method", type=str, default="deterministic")
-    parser.add_argument("--dknn_num_samples", type=int, default=-1)
-    parser.add_argument("--dknn_similarity", type=str, default="euclidean")
-    parser.add_argument("--dknn_loss_type", type=str, default="bce")
-    parser.add_argument("--epochs_proto_recompute", type=int, default=1)
-    parser.add_argument("--x2c_only_epochs", type=int, default=0)
     
     # optimiser settings
+    parser.add_argument("--optimiser", type=str, default="adam")
     parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight_decay", type=float, default=0.0005)
     
     # plateau lr scheduler settings
     parser.add_argument("--plateau_lr_scheduler_enable", action="store_true")
-    parser.add_argument("--plateau_lr_scheduler_monitor", type=str, default=DEFAULT_MONITOR)
+    parser.add_argument("--plateau_lr_scheduler_monitor", type=str, default="val_c2y_acc")
     parser.add_argument("--plateau_lr_scheduler_mode", type=str, default="max")
     parser.add_argument("--plateau_lr_scheduler_patience", type=int, default=10)
     parser.add_argument("--plateau_lr_scheduler_factor", type=float, default=0.1)
@@ -274,7 +304,7 @@ def parse_arguments():
     
     # early stop settings
     parser.add_argument("--early_stop_enable", action="store_true")
-    parser.add_argument("--early_stop_monitor", type=str, default=DEFAULT_MONITOR)
+    parser.add_argument("--early_stop_monitor", type=str, default="val_c2y_acc")
     parser.add_argument("--early_stop_mode", type=str, default="max")
     parser.add_argument("--early_stop_patience", type=int, default=3)
     
@@ -286,11 +316,6 @@ def parse_arguments():
     # tensorboard settings
     parser.add_argument("--tb_log_dir", type=str, default=None)
     parser.add_argument("--tb_name", type=str, default="protocbm")
-    
-    #checkpoint settings
-    parser.add_argument("--checkpoint_dir", type=str, default=None)
-    parser.add_argument("--checkpoint_name", type=str, default=None)
-    parser.add_argument("--checkpoint_n_epochs", type=int, default=None)
     
     # wandb settings
     parser.add_argument("--run_name", type=str, default="protocbm-cub")
@@ -313,6 +338,11 @@ def parse_arguments():
                         help='True if you dont want to crete wandb logs.')
     parser.set_defaults(disable_wandb=False)
     
+    # checkpoint settings
+    parser.add_argument("--checkpoint_dir", type=str, default=None)
+    parser.add_argument("--checkpoint_monitor", type=str, default=None)
+    parser.add_argument("--checkpoint_name", type=str, default=None)
+    parser.add_argument("--checkpoint_n_epochs", type=int, default=None)
     
     args = parser.parse_args()
     return args
