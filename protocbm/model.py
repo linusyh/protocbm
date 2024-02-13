@@ -51,6 +51,7 @@ class ProtoCBM(L.LightningModule, ABC):
         momentum=0.9,
         learning_rate=0.01,
         weight_decay=4e-05,
+        batch_process_fn=None,
         plateau_lr_scheduler_enable=False,
         plateau_lr_scheduler_monitor="val_c2y_acc",
         plateau_lr_scheduler_mode="max",
@@ -73,6 +74,8 @@ class ProtoCBM(L.LightningModule, ABC):
         self.concept_loss_weight = concept_loss_weight
         self.concept_loss_fn = torch.nn.BCEWithLogitsLoss()
         
+        self.batch_process_fn = batch_process_fn
+        
         self.lr = learning_rate
         self.momentum = momentum
         self.weight_decay = weight_decay
@@ -87,8 +90,10 @@ class ProtoCBM(L.LightningModule, ABC):
         self.plateau_lr_scheduler_cooldown = plateau_lr_scheduler_cooldown
     
     def _process_batch(self, batch):
-        img_data, class_label, concept_label = batch
-        return img_data, class_label, concept_label
+        if self.batch_process_fn is not None:
+            return self.batch_process_fn(batch)
+        else:
+            return batch
         
     def prepare_prototypes(self):
         print("Preparing prototypes")
@@ -215,7 +220,6 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         momentum=0.9,
         learning_rate=0.01,
         weight_decay=4e-05,
-        top_k_accuracy_c2y=1,
         plateau_lr_scheduler_enable=False,
         plateau_lr_scheduler_monitor="val_c2y_acc",
         plateau_lr_scheduler_mode="max",
@@ -223,7 +227,8 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         plateau_lr_scheduler_factor=0.1,
         plateau_lr_scheduler_min_lr=1e-6,
         plateau_lr_scheduler_threshold=0.01,
-        plateau_lr_scheduler_cooldown=0,):
+        plateau_lr_scheduler_cooldown=0,
+        batch_process_fn=None):
         super().__init__(
             n_concepts=n_concepts,
             concept_loss_weight=concept_loss_weight,
@@ -240,7 +245,8 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
             plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
             plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
             plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
-            plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown
+            plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown,
+            batch_process_fn=batch_process_fn
         )
         
         self.dknn_k = dknn_k
@@ -298,7 +304,7 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
         plateau_lr_scheduler_min_lr=1e-6,
         plateau_lr_scheduler_threshold=0.01,
         plateau_lr_scheduler_cooldown=0,
-        ):
+        batch_process_fn=None):
         super().__init__(
             n_concepts=n_concepts,
             n_classes=n_classes,
@@ -322,7 +328,8 @@ class ProtoCBMDKNNSequential(ProtoCBMDKNN, SequentialCBM):
             plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
             plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
             plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
-            plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown
+            plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown,
+            batch_process_fn=batch_process_fn
         )
         SequentialCBM.__init__(self)
         self.save_hyperparameters(ignore=["x2c_model"])
@@ -410,7 +417,8 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         plateau_lr_scheduler_factor=0.1,
         plateau_lr_scheduler_min_lr=1e-6,
         plateau_lr_scheduler_threshold=0.01,
-        plateau_lr_scheduler_cooldown=0,):
+        plateau_lr_scheduler_cooldown=0,
+        batch_process_fn=None):
         
         super().__init__(
             n_concepts=n_concepts,
@@ -435,7 +443,8 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
             plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
             plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
             plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
-            plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown
+            plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown,
+            batch_process_fn=batch_process_fn
         )
         JointCBM.__init__(self)
         self.proto_dataloader = proto_train_dl
@@ -449,12 +458,12 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
             
     def _forward(self, batch, batch_idx, mask_prototype=True):
         logging.debug("_forward")
-        x, truth_y, truth_c = self._process_batch(batch)
+        x, y, c = self._process_batch(batch)
         pred_c_logit = self.x2c_model(x)
         pred_c = self.c_act(pred_c_logit)
         pred_c_scores = F.sigmoid(pred_c_logit)
-        x2c_loss = self.concept_loss_fn(pred_c_logit, truth_c)
-        x2c_accuracy = self.x2c_accuracy(pred_c_scores, truth_c)
+        x2c_loss = self.concept_loss_fn(pred_c_logit, c.float())
+        x2c_accuracy = self.x2c_accuracy(pred_c_scores, c)
         
         if self.x2c_only():
             return {
@@ -481,7 +490,7 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
             proto_y = self.proto_classes
         
         pred_y = self.proto_model(pred_c, proto_x)
-        proto_results = self.calculate_proto_loss(pred_y, truth_y, proto_y)
+        proto_results = self.calculate_proto_loss(pred_y, y, proto_y)
         
         loss = self.concept_loss_weight * x2c_loss + \
             self.proto_loss_weight * proto_results['loss']
