@@ -27,6 +27,14 @@ class TestDKNN(unittest.TestCase):
         
         self.assertAlmostEqual(loss1, loss2, places=5)
         
+    def test_dknn_class_accuracy(self):
+        scores = torch.tensor([[0.8, 0.5, 0.4], [0.3, 0.2, 0.4], [0.1, 0.9, 0.9], [0.2, 0.3, 0.1]])
+        neighbour_labels = torch.tensor([1, 2, 1])
+        target_labels = torch.tensor([2, 1, 0, 0])
+        
+        accuracy = dknn_cal_class_accuracy(scores, neighbour_labels, target_labels, 2)
+        print(accuracy)
+        self.assertAlmostEqual(accuracy, 1.5/4)
         
 
 if __name__ == "__main__":

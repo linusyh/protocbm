@@ -175,8 +175,8 @@ def dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k):
             label_count = counts[idx]
             if counts.max() == label_count:
                 accuracies.append(1 / (counts==label_count).sum())
-        
-        accuracies.append(0)
+        else:
+            accuracies.append(0)
     
     return np.mean(accuracies)
     
