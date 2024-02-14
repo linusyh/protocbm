@@ -75,25 +75,32 @@ def dknn_loss_factory(loss_str: str) -> torch.nn.Module:
 
 class DKNN(torch.nn.Module):
 
-    def __init__(self, k, tau=1.0, hard=False, method='deterministic', num_samples=-1, similarity='euclidean'):
+    def __init__(self, k, tau=1.0, hard=False, method='deterministic', num_samples=-1, similarity='euclidean', max_neighbours=-1):
         super(DKNN, self).__init__()
         self.k = k
         self.soft_sort = NeuralSort(tau=tau, hard=hard)
         self.method = method
         self.num_samples = num_samples
         self.similarity = similarity
+        self.max_neighbours = max_neighbours
 
     # query: M x p
     # neighbors: N x p
     #
     # returns:
     def forward(self, query, neighbors, tau=1.0):
+        if self.max_neighbours > 0 and neighbors.shape[0] > self.max_neighbours:
+            perm = torch.randperm(neighbors.shape[0], device=neighbors.device)
+            top_idx = perm[:self.max_neighbours]
+            neighbors = neighbors[top_idx]
+        
         if self.similarity == 'euclidean':
             diffs = (query.unsqueeze(1) - neighbors.unsqueeze(0))
             squared_diffs = diffs**2
             l2_norms = squared_diffs.sum(2)
             norms = l2_norms
             scores = -norms  # B * N
+            
         elif self.similarity == 'cosine':
             # scores = F.cosine_similarity(query.unsqueeze(1), neighbors.unsqueeze(0), dim=2) - 1
             scores = F.cosine_similarity(query.unsqueeze(1), neighbors.unsqueeze(0), dim=2)
@@ -105,6 +112,9 @@ class DKNN(torch.nn.Module):
             top_k = P_hat[:, :self.k, :].sum(1)  # B*N
             return top_k
         if self.method == 'stochastic':
+            if scores.min().item() <= 0:
+                scores = scores - scores.min() + 1e-08
+            # print("Scores: " + str((scores.min().item(), scores.max().item())))
             pl_s = PL(scores, tau, hard=False)
             P_hat = pl_s.sample((self.num_samples, ))
             top_k = P_hat[:, :, :self.k, :].sum(2)

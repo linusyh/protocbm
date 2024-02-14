@@ -17,8 +17,7 @@ ByteTensor = torch.cuda.ByteTensor if USE_CUDA else torch.ByteTensor
 
 
 class PL(Distribution):
-    # TODO: Restore constraint once no more problem
-    # arg_constraints = {'scores': constraints.positive, 'tau': constraints.positive}
+    arg_constraints = {'scores': constraints.positive, 'tau': constraints.positive}
     arg_constraints = {}
     has_rsample = True
 
@@ -94,6 +93,7 @@ class PL(Distribution):
             else:
                 log_s_perturb = self.scores.unsqueeze(0) + sample_gumbel([n_samples, 1, self.n, 1])
             log_s_perturb = log_s_perturb.view(-1, self.n, 1)
+            print(log_s_perturb.shape)
             P_hat = self.relaxed_sort(log_s_perturb)
             P_hat = P_hat.view(n_samples, -1, self.n, self.n)
 

@@ -209,7 +209,7 @@ def protocbm_add_common_args(parser: ArgumentParser,
     # DKNN settings
     parser.add_argument("--dknn_k", type=int, default=1)
     parser.add_argument("--dknn_tau", type=float, default=1.0)
-    parser.add_argument("--dknn_method", type=str, default="deterministic")
+    parser.add_argument("--dknn_method", type=str, default="deterministic", choices=["deterministic", "stochastic"])
     parser.add_argument("--dknn_num_samples", type=int, default=-1)
     parser.add_argument("--dknn_similarity", type=str, default="euclidean")
     parser.add_argument("--dknn_loss_type", type=str, default="bce")
