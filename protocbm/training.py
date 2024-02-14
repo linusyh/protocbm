@@ -76,6 +76,7 @@ def protocbm_train_loop(
     dknn_num_samples: int = -1,
     dknn_similarity='euclidean',
     dknn_loss_type='bce',
+    dknn_max_neighbours=-1,
     x2c_only_epochs: int = 0,
     epochs_proto_recompute: int = 1,
     # optimiser settings
@@ -144,6 +145,7 @@ def protocbm_train_loop(
         dknn_num_samples=dknn_num_samples,
         dknn_similarity=dknn_similarity,
         dknn_loss_type=dknn_loss_type,
+        dknn_max_neighbours=dknn_max_neighbours,
         c_activation=c_activation,
         proto_train_dl=train_dl,
         learning_rate=lr,
@@ -211,6 +213,7 @@ def protocbm_add_common_args(parser: ArgumentParser,
     parser.add_argument("--dknn_tau", type=float, default=1.0)
     parser.add_argument("--dknn_method", type=str, default="deterministic", choices=["deterministic", "stochastic"])
     parser.add_argument("--dknn_num_samples", type=int, default=-1)
+    parser.add_argument("--dknn_max_neighbours", type=int, default=-1)
     parser.add_argument("--dknn_similarity", type=str, default="euclidean")
     parser.add_argument("--dknn_loss_type", type=str, default="bce")
     parser.add_argument("--epochs_proto_recompute", type=int, default=1)

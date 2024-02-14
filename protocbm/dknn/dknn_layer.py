@@ -75,25 +75,19 @@ def dknn_loss_factory(loss_str: str) -> torch.nn.Module:
 
 class DKNN(torch.nn.Module):
 
-    def __init__(self, k, tau=1.0, hard=False, method='deterministic', num_samples=-1, similarity='euclidean', max_neighbours=-1):
+    def __init__(self, k, tau=1.0, hard=False, method='deterministic', num_samples=-1, similarity='euclidean'):
         super(DKNN, self).__init__()
         self.k = k
         self.soft_sort = NeuralSort(tau=tau, hard=hard)
         self.method = method
         self.num_samples = num_samples
         self.similarity = similarity
-        self.max_neighbours = max_neighbours
 
     # query: M x p
     # neighbors: N x p
     #
     # returns:
-    def forward(self, query, neighbors, tau=1.0):
-        if self.max_neighbours > 0 and neighbors.shape[0] > self.max_neighbours:
-            perm = torch.randperm(neighbors.shape[0], device=neighbors.device)
-            top_idx = perm[:self.max_neighbours]
-            neighbors = neighbors[top_idx]
-        
+    def forward(self, query, neighbors, tau=1.0):      
         if self.similarity == 'euclidean':
             diffs = (query.unsqueeze(1) - neighbors.unsqueeze(0))
             squared_diffs = diffs**2

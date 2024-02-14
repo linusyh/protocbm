@@ -216,6 +216,7 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         dknn_num_samples=-1,
         dknn_similarity='euclidean',
         dknn_loss_type='minus_count',
+        dknn_max_neighbours=-1,
         c_activation="sigmoid",
         momentum=0.9,
         learning_rate=0.01,
@@ -256,6 +257,7 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
         self.dknn_simiarity = dknn_similarity
         self.dknn_loss_type = dknn_loss_type        
         self.dknn_loss_function = dknn_loss_factory(dknn_loss_type)
+        self.dknn_max_neighbours = dknn_max_neighbours
 
         self.x2c_accuracy = Accuracy("binary")
         
@@ -265,7 +267,7 @@ class ProtoCBMDKNN(ProtoCBM, ABC):
                                 hard=False,
                                 method=dknn_method,
                                 num_samples=dknn_num_samples,
-                                similarity=dknn_similarity)
+                                similarity=dknn_similarity,)
         
     def calculate_proto_loss(self, scores, query_y, neighbour_y):
         query_y_one_hot = F.one_hot(query_y, self.n_classes)  # (B, C)
@@ -404,6 +406,7 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         dknn_num_samples=-1,
         dknn_similarity="euclidean",
         dknn_loss_type="minus_count",
+        dknn_max_neighbours=-1,
         c_activation="sigmoid",
         epoch_proto_recompute=1,
         momentum=0.9,
@@ -432,6 +435,7 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
             dknn_num_samples=dknn_num_samples,
             dknn_similarity=dknn_similarity,
             dknn_loss_type=dknn_loss_type,
+            dknn_max_neighbours=dknn_max_neighbours,
             c_activation=c_activation,
             momentum=momentum,
             learning_rate=learning_rate,
@@ -488,6 +492,11 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         else:
             proto_x = self.proto_concepts
             proto_y = self.proto_classes
+            
+        if self.dknn_max_neighbours > 0 and proto_x.shape[0] > self.dknn_max_neighbours:
+            idx = torch.randperm(proto_x.shape[0])[:self.dknn_max_neighbours]
+            proto_x = proto_x[idx, ...]
+            proto_y = proto_y[idx]    
         
         pred_y = self.proto_model(pred_c, proto_x)
         proto_results = self.calculate_proto_loss(pred_y, y, proto_y)
