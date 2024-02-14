@@ -190,6 +190,12 @@ def dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k):
         else:
             accuracies.append(0)
     
+    if len(accuracies) == 0:
+        print("==EMPTY ACCURACIES==")
+        print(dknn_output.shape)
+        print(neighbour_label.shape)
+        print(target_label.shape)
+        return 0
     return np.mean(accuracies)
     
 def dknn_results_analysis(dknn_output, neighbour_label, target_label, k):
