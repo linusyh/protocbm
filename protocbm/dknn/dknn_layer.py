@@ -175,10 +175,18 @@ def dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k):
         top_k_labels = neighbour_label[top_k_idx]
         uniques, counts = np.unique(top_k_labels, return_counts=True)
         if label in uniques:
-            idx = np.where(uniques == label)
+            idx = np.where(uniques == label)[0]
             label_count = counts[idx]
             if counts.max() == label_count:
-                accuracies.append(1 / (counts==label_count).sum())
+                divisor = (counts==label_count).sum()
+                if divisor > 0:
+                    accuracies.append(1/divisor)
+                else:
+                    print(pred)
+                    print(label)
+                    print(uniques)
+                    print(counts)
+                    accuracies.append(0)
         else:
             accuracies.append(0)
     
