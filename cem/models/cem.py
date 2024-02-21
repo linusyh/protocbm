@@ -305,6 +305,7 @@ class ConceptEmbeddingModel(ConceptBottleneckModel):
         output_embeddings=False,
         output_latent=None,
         output_interventions=None,
+        batch_idx=None,
     ):
         output_interventions = (
             output_interventions if output_interventions is not None

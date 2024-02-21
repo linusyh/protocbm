@@ -404,28 +404,7 @@ class ConceptBottleneckModel(pl.LightningModule):
             )
         return c_pred_copy
 
-    def _forward(
-        self,
-        x,
-        intervention_idxs=None,
-        competencies=None,
-        prev_interventions=None,
-        c=None,
-        y=None,
-        train=False,
-        latent=None,
-        output_latent=None,
-        output_embeddings=False,
-        output_interventions=None,
-    ):
-        output_interventions = (
-            output_interventions if output_interventions is not None
-            else self.output_interventions
-        )
-        output_latent = (
-            output_latent if output_latent is not None
-            else self.output_latent
-        )
+    def _run_x2c(self, x, latent):
         if latent is None:
             latent = self.x2c_model(x)
         if self.sigmoidal_prob or self.bool:
@@ -447,6 +426,39 @@ class ConceptBottleneckModel(pl.LightningModule):
                 c_sem = self.sig(latent[:, :-self.extra_dims])
             else:
                 c_sem = self.sig(latent)
+        return c_pred, c_sem
+    
+    
+    def _run_c2y(self, c_pred, batch_idx, train=False):
+        y = self.c2y_model(c_pred)
+        return y
+    
+    def _forward(
+        self,
+        x,
+        intervention_idxs=None,
+        competencies=None,
+        prev_interventions=None,
+        c=None,
+        y=None,
+        train=False,
+        latent=None,
+        output_latent=None,
+        output_embeddings=False,
+        output_interventions=None,
+        batch_idx=None,
+    ):
+        output_interventions = (
+            output_interventions if output_interventions is not None
+            else self.output_interventions
+        )
+        output_latent = (
+            output_latent if output_latent is not None
+            else self.output_latent
+        )
+        
+        c_pred, c_sem = self._run_x2c(x, latent)        
+        
         if output_embeddings or (
             (intervention_idxs is None) and (c is not None) and (
             self.intervention_policy is not None
@@ -560,9 +572,9 @@ class ConceptBottleneckModel(pl.LightningModule):
             c_true=c_int,
         )
         if self.bool:
-            y = self.c2y_model((c_pred > 0.5).float())
+            y = self._run_c2y((c_pred > 0.5).float(), batch_idx, train)
         else:
-            y = self.c2y_model(c_pred)
+            y = self._run_c2y(c_pred, batch_idx, train)
         tail_results = []
         if output_interventions:
             if intervention_idxs is None:
@@ -598,6 +610,7 @@ class ConceptBottleneckModel(pl.LightningModule):
             prev_interventions=prev_interventions,
             intervention_idxs=intervention_idxs,
             latent=latent,
+            batch_idx=None,
         )
 
     def predict_step(
@@ -616,30 +629,16 @@ class ConceptBottleneckModel(pl.LightningModule):
             train=False,
             competencies=competencies,
             prev_interventions=prev_interventions,
+            batch_idx=batch_idx,
         )
-
-    def _run_step(
-        self,
-        batch,
-        batch_idx,
-        train=False,
-        intervention_idxs=None,
-    ):
-        x, y, (c, competencies, prev_interventions) = self._unpack_batch(batch)
-        outputs = self._forward(
-            x,
-            intervention_idxs=intervention_idxs,
-            c=c,
-            y=y,
-            train=train,
-            competencies=competencies,
-            prev_interventions=prev_interventions,
-        )
-        c_sem, c_logits, y_logits = outputs[0], outputs[1], outputs[2]
+        
+    def _cal_loss(self, c, c_sem, c_logits, y, y_outputs,
+                  competencies, prev_interventions):
+        y_logits = y_outputs
         if self.task_loss_weight != 0:
             task_loss = self.loss_task(
                 y_logits if y_logits.shape[-1] > 1 else y_logits.reshape(-1),
-                y,
+                y
             )
             task_loss_scalar = task_loss.detach()
         else:
@@ -662,33 +661,19 @@ class ConceptBottleneckModel(pl.LightningModule):
                 ) # This forces zero loss when c is uncertain
                 concept_loss = self.loss_concept(c_sem_used, c)
                 concept_loss_scalar = concept_loss.detach()
-            loss = self.concept_loss_weight * concept_loss + task_loss + \
-                self._extra_losses(
-                    x=x,
-                    y=y,
-                    c=c,
-                    c_sem=c_sem,
-                    c_pred=c_logits,
-                    y_pred=y_logits,
-                    competencies=competencies,
-                    prev_interventions=prev_interventions,
-                )
+            loss = self.concept_loss_weight * concept_loss + task_loss
+                
         else:
-            loss = task_loss + self._extra_losses(
-                x=x,
-                y=y,
-                c=c,
-                c_sem=c_sem,
-                c_pred=c_logits,
-                y_pred=y_logits,
-                competencies=competencies,
-                prev_interventions=prev_interventions,
-            )
+            loss = task_loss
             concept_loss_scalar = 0.0
-        # compute accuracy
+        
+        return loss, concept_loss_scalar, task_loss_scalar
+    
+    
+    def _cal_metrics(self, c_sem, y_outputs, c, y, loss, concept_loss_scalar, task_loss_scalar):
         (c_accuracy, c_auc, c_f1), (y_accuracy, y_auc, y_f1) = compute_accuracy(
             c_sem,
-            y_logits,
+            y_outputs,
             c,
             y,
         )
@@ -706,7 +691,7 @@ class ConceptBottleneckModel(pl.LightningModule):
         }
         if self.top_k_accuracy is not None:
             y_true = y.reshape(-1).cpu().detach()
-            y_pred = y_logits.cpu().detach()
+            y_pred = y_outputs.cpu().detach()
             labels = list(range(self.n_tasks))
             if isinstance(self.top_k_accuracy, int):
                 top_k_accuracy = list(range(1, self.top_k_accuracy))
@@ -722,6 +707,45 @@ class ConceptBottleneckModel(pl.LightningModule):
                         labels=labels,
                     )
                     result[f'y_top_{top_k_val}_accuracy'] = y_top_k_accuracy
+        
+        return result
+
+    def _run_step(
+        self,
+        batch,
+        batch_idx,
+        train=False,
+        intervention_idxs=None,
+    ):
+        x, y, (c, competencies, prev_interventions) = self._unpack_batch(batch)
+        outputs = self._forward(
+            x,
+            intervention_idxs=intervention_idxs,
+            c=c,
+            y=y,
+            train=train,
+            competencies=competencies,
+            prev_interventions=prev_interventions,
+            batch_idx=batch_idx
+        )
+        
+        c_sem, c_logits, y_outputs = outputs[0], outputs[1], outputs[2]
+        loss, concept_loss_scalar, task_loss_scalar = self._cal_loss(c, c_sem, c_logits, y, y_outputs, competencies, prev_interventions)
+        
+        loss = loss + self._extra_losses(
+                    x=x,
+                    y=y,
+                    c=c,
+                    c_sem=c_sem,
+                    c_pred=c_logits,
+                    y_pred=y_outputs,
+                    competencies=competencies,
+                    prev_interventions=prev_interventions,
+                )
+        
+        # compute accuracy
+        result = self._cal_metrics(c_sem, y_outputs, c, y, loss, concept_loss_scalar, task_loss_scalar)
+        
         return loss, result
 
     def training_step(self, batch, batch_no):
