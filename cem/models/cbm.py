@@ -1,6 +1,6 @@
 import sklearn.metrics
 import torch
-import pytorch_lightning as pl
+import lightning as L
 from torchvision.models import resnet50, densenet121
 import numpy as np
 
@@ -12,7 +12,7 @@ from cem.metrics.accs import compute_accuracy
 ################################################################################
 
 
-class ConceptBottleneckModel(pl.LightningModule):
+class ConceptBottleneckModel(L.LightningModule):
     def __init__(
         self,
         n_concepts,
