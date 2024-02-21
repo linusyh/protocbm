@@ -69,6 +69,7 @@ class ProtoCBM(ConceptBottleneckModel):
                  top_k_accuracy=None,
                  
                  batch_process_fn=None,
+                 concept_from_logit=False,
                  dknn_k=2,
                  dknn_tau=1,
                  dknn_method="deterministic",
@@ -124,6 +125,7 @@ class ProtoCBM(ConceptBottleneckModel):
             include_certainty=include_certainty,
             top_k_accuracy=top_k_accuracy,
         )
+        
         self.dknn_k = dknn_k
         self.dknn_tau = dknn_tau
         self.dknn_method = dknn_method
@@ -141,6 +143,7 @@ class ProtoCBM(ConceptBottleneckModel):
         self.proto_dataloader = proto_train_dl
         
         self.batch_process_fn = batch_process_fn
+        self.concept_from_logit = concept_from_logit
         self.plateau_lr_scheduler_enable = plateau_lr_scheduler_enable
         self.plateau_lr_scheduler_monitor = plateau_lr_scheduler_monitor
         self.plateau_lr_scheduler_mode = plateau_lr_scheduler_mode
@@ -167,7 +170,11 @@ class ProtoCBM(ConceptBottleneckModel):
             
             with torch.no_grad():
                 c_pred, c_sem = self._run_x2c(x.to(self.device), None)
-                list_c_activations.append(c_pred)
+                if self.concept_from_logit:
+                    c = c_pred
+                else:
+                    c = c_sem
+                list_c_activations.append(c)
                 list_cls_labels.append(y.to(self.device))
                 
             # Ensure consistent printing of progress bar

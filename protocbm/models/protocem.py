@@ -65,6 +65,7 @@ class ProtoCEM(ProtoCBM):
                          concept_loss_weight=concept_loss_weight,
                          task_loss_weight=task_loss_weight,
                          x2c_model=torch.nn.Identity(),  # Not needed for ProtoCEM, hence filler
+                         concept_from_logit=True, # Very important, logits = actual embedding in CEM
                          optimizer=optimizer,
                          momentum=momentum,
                          learning_rate=learning_rate,

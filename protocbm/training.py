@@ -12,8 +12,8 @@ from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from cem.data.CUB200 import cub_loader
-from protocbm.model import *
 from protocbm._config import *
+from protocbm.models.protocbm import ProtoCBM
 
 
 def create_wandb_logger(args: dict):
@@ -44,7 +44,9 @@ def construct_backbone(arch, n_classes, pretrained=True):
             backbone = torchvision.models.resnet101(weights=torchvision.models.ResNet101_Weights.DEFAULT if pretrained else None)
         elif arch == "resnet152":
             backbone = torchvision.models.resnet152(weights=torchvision.models.ResNet152_Weights.DEFAULT if pretrained else None)
-        backbone.fc = torch.nn.Linear(backbone.fc.in_features, n_classes)        
+        
+        if n_classes is not None:
+            backbone.fc = torch.nn.Linear(backbone.fc.in_features, n_classes)        
     elif arch.startswith("efficientnet-v2"):
         if arch == "efficientnet-v2-s":
             backbone = torchvision.models.efficientnet_v2_s(weights=torchvision.models.EfficientNet_V2_S_Weights.DEFAULT if pretrained else None)
@@ -52,8 +54,8 @@ def construct_backbone(arch, n_classes, pretrained=True):
             backbone = torchvision.models.efficientnet_v2_m(weights=torchvision.models.EfficientNet_V2_M_Weights.DEFAULT if pretrained else None)
         elif arch == "efficientnet-v2-l":
             backbone = torchvision.models.efficientnet_v2_l(weights=torchvision.models.EfficientNet_V2_L_Weights.DEFAULT if pretrained else None)
-        
-        backbone.classifier[1] = torch.nn.Linear(backbone.classifier[1].in_features, n_classes)
+        if n_classes is not None:
+            backbone.classifier[1] = torch.nn.Linear(backbone.classifier[1].in_features, n_classes)
     else:
         raise ValueError(f"Unknown architecture: {arch}")
     return backbone
@@ -68,7 +70,7 @@ def protocbm_train_loop(
     concept_loss_weight: float = 1.0,
     proto_loss_weight: float = 1.0,
     x2c_arch: str = "resnet50",
-    c_activation="sigmoid",
+    concept_from_logit: bool = False,
     # DKNN settings
     dknn_k: int = 1,
     dknn_tau: float = 1.0,
@@ -133,12 +135,13 @@ def protocbm_train_loop(
     
     # model preparation
     x2c_model = construct_backbone(x2c_arch, pretrained=True, n_classes=n_concepts)
-    protocbm_model = ProtoCBMDKNNJoint(
+    protocbm_model = ProtoCBM(
         n_concepts= n_concepts,
-        n_classes=n_classes,
+        n_tasks=n_classes,
         x2c_model=x2c_model,
         concept_loss_weight=concept_loss_weight,
-        proto_loss_weight=proto_loss_weight,
+        task_loss_weight=proto_loss_weight,
+        concept_from_logit=concept_from_logit,
         dknn_k=dknn_k,
         dknn_tau=dknn_tau,
         dknn_method=dknn_method,
@@ -146,7 +149,6 @@ def protocbm_train_loop(
         dknn_similarity=dknn_similarity,
         dknn_loss_type=dknn_loss_type,
         dknn_max_neighbours=dknn_max_neighbours,
-        c_activation=c_activation,
         proto_train_dl=train_dl,
         learning_rate=lr,
         weight_decay=weight_decay,
@@ -203,7 +205,7 @@ def protocbm_add_common_args(parser: ArgumentParser,
     parser.add_argument("--n_concepts", type=int, required=True)
     parser.add_argument("--n_classes", type=int, required=True)
     parser.add_argument("--x2c_arch", type=str, default="resnet50")
-    parser.add_argument("--c_activation", type=str, default="sigmoid")
+    parser.add_argument("--concept_from_logit", action="store_true")
     
     parser.add_argument("--concept_loss_weight", type=float, default=1.0)
     parser.add_argument("--proto_loss_weight", type=float, default=1.0)
