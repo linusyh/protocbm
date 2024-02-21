@@ -50,7 +50,7 @@ class ProtoCBM(L.LightningModule, ABC):
         c_activation="sigmoid",
         momentum=0.9,
         learning_rate=0.01,
-        weight_decay=4e-05,
+        weight_decay=4e-05, 
         batch_process_fn=None,
         plateau_lr_scheduler_enable=False,
         plateau_lr_scheduler_monitor="val_c2y_acc",
@@ -59,7 +59,7 @@ class ProtoCBM(L.LightningModule, ABC):
         plateau_lr_scheduler_factor=0.1,
         plateau_lr_scheduler_min_lr=1e-6,
         plateau_lr_scheduler_threshold=0.01,
-        plateau_lr_scheduler_cooldown=0,
+        plateau_lr_scheduler_cooldown=0
     ):
         super().__init__()
         self.n_concepts = n_concepts
@@ -298,11 +298,11 @@ class ProtoCBMDKNNJoint(ProtoCBMDKNN, JointCBM):
         dknn_loss_type="minus_count",
         dknn_max_neighbours=-1,
         c_activation="sigmoid",
-        epoch_proto_recompute=1,
         momentum=0.9,
         learning_rate=0.01,
         weight_decay=4e-05,
         x2c_only_epochs=0,
+        epoch_proto_recompute=1,
         plateau_lr_scheduler_enable=False,
         plateau_lr_scheduler_monitor="val_c2y_acc",
         plateau_lr_scheduler_mode="max",
