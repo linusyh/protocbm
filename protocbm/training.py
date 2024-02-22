@@ -66,7 +66,7 @@ def get_proto_model(name: str):
         "protocbm": ProtoCBM,
         "protocem": ProtoCEM
     }
-    return lookup.get[name.lower().strip()]  
+    return lookup[name.lower().strip()]  
 
 
 def construct_model(config: DictConfig, 
