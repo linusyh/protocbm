@@ -4,6 +4,7 @@ from protocbm.models.utils import *
 from protocbm.dknn.dknn_layer import *
 
 import sys
+from functools import partial
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
@@ -51,8 +52,7 @@ class ProtoCBM(ConceptBottleneckModel):
                  bottleneck_nonlinear=None,
                  output_latent=False,
  
-                 x2c_model=None,
-                 c_extractor_arch=utils.wrap_pretrained_model(resnet50),
+                 x2c_arch=partial(get_backbone, "resnet18"),
  
                  optimiser="adam",
                  optimiser_params={},
@@ -99,8 +99,8 @@ class ProtoCBM(ConceptBottleneckModel):
             sigmoidal_extra_capacity=sigmoidal_extra_capacity,
             bottleneck_nonlinear=bottleneck_nonlinear,
             output_latent=output_latent,
-            x2c_model=x2c_model,
-            c_extractor_arch=c_extractor_arch,
+            x2c_model=None,
+            c_extractor_arch=x2c_arch,
             c2y_model=proto_model,
             c2y_layers=None,
             optimizer=optimiser,

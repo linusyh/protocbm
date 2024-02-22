@@ -55,39 +55,11 @@ def create_wandb_logger(args: DictConfig):
         settings=wandb.Settings(start_method="thread"))
     
     
-    print(flatten_dict(args))
+    logging.debug(flatten_dict(args))
     wandb_logger.experiment.config.update(flatten_dict(args))  # add configuration file
     wandb.run.name = wandb_args.run_name + wandb_args.suffix
     return wandb_logger
 
-def construct_backbone(arch, n_classes, pretrained=True):
-    arch = arch.lower().strip()
-    if arch.startswith("resnet"):
-        if arch == "resnet18":
-            backbone = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.DEFAULT if pretrained else None)
-        elif arch == "resnet34":
-            backbone = torchvision.models.resnet34(weights=torchvision.models.ResNet34_Weights.DEFAULT if pretrained else None)
-        elif arch == "resnet50":
-            backbone = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT if pretrained else None)
-        elif arch == "resnet101":
-            backbone = torchvision.models.resnet101(weights=torchvision.models.ResNet101_Weights.DEFAULT if pretrained else None)
-        elif arch == "resnet152":
-            backbone = torchvision.models.resnet152(weights=torchvision.models.ResNet152_Weights.DEFAULT if pretrained else None)
-        
-        if n_classes is not None:
-            backbone.fc = torch.nn.Linear(backbone.fc.in_features, n_classes)        
-    elif arch.startswith("efficientnet-v2"):
-        if arch == "efficientnet-v2-s":
-            backbone = torchvision.models.efficientnet_v2_s(weights=torchvision.models.EfficientNet_V2_S_Weights.DEFAULT if pretrained else None)
-        elif arch == "efficientnet-v2-m":
-            backbone = torchvision.models.efficientnet_v2_m(weights=torchvision.models.EfficientNet_V2_M_Weights.DEFAULT if pretrained else None)
-        elif arch == "efficientnet-v2-l":
-            backbone = torchvision.models.efficientnet_v2_l(weights=torchvision.models.EfficientNet_V2_L_Weights.DEFAULT if pretrained else None)
-        if n_classes is not None:
-            backbone.classifier[1] = torch.nn.Linear(backbone.classifier[1].in_features, n_classes)
-    else:
-        raise ValueError(f"Unknown architecture: {arch}")
-    return backbone
 
 def get_proto_model(name: str):
     lookup = {
@@ -100,12 +72,10 @@ def get_proto_model(name: str):
 def construct_model(config: DictConfig, 
                     proto_dl: DataLoader,
                     batch_process_fn=None):
-    x2c_model = construct_backbone(config.model.x2c_arch, pretrained=True, n_classes=config.dataset.n_concepts)
     
     model_config_dict = dict(config.model.copy())
     model_type = model_config_dict.pop("type")
     model_config_dict.pop('proto')
-    model_config_dict.pop('x2c_arch')
     
     ModelClass = get_proto_model(model_type)
     
@@ -113,7 +83,6 @@ def construct_model(config: DictConfig,
         n_concepts= config.dataset.n_concepts,
         n_tasks=config.dataset.n_classes,
         proto_train_dl=proto_dl,
-        x2c_model=x2c_model,
         batch_process_fn=batch_process_fn,
         **model_config_dict
     )
@@ -157,7 +126,7 @@ def train_loop(
     # Build model
     model = construct_model(config, train_dl, batch_process_fn)
     
-    logging.info(str(model))
+    logging.debug(str(model))
     
     # Welcome Screen
     logging.info("=" * 20)
@@ -166,8 +135,11 @@ def train_loop(
     logging.info(f" Val set size: {len(val_dl.dataset)}")
     logging.info("=" * 20)
     
-    loggers = [TensorBoardLogger(config.tensorboard.dir, config.tensorboard.name)]
+    loggers = []
     
+    if "tensorboard" in config.keys():
+        loggers.append(TensorBoardLogger(config.tensorboard.dir, name=config.tensorboard.name))
+        
     # setup wandb logging
     wandb_logger = None
     if config.wandb.enable:
@@ -175,10 +147,7 @@ def train_loop(
         loggers.append(wandb_logger)
     
     # set logging level
-    logging.getLogger("lightning.pytorch").setLevel(config.log_level)
-    
-    # model preparation
-    
+    logging.getLogger("lightning.pytorch").setLevel(config.log_level)    
  
     # Careate callbacks
     callbacks = []

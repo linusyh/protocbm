@@ -4,16 +4,17 @@ from protocbm.dknn.dknn_layer import *
 from .utils import get_activation_fn, get_optimiser
 
 import sys
+from functools import partial
 from torch.utils.data import DataLoader
 from torchvision.models import *
-from pytorch_lightning import LightningModule
+from tqdm import tqdm
 
 class ProtoCEM(ProtoCBM):
     def __init__(self,
                  n_concepts,
                  n_tasks,
                  proto_train_dl: DataLoader,
-                 x2c_model=None,
+                 x2c_arch=partial(resnet18, pretrained=True),
                  emb_size=16,
                  training_intervention_prob=0.25,
                  embedding_activation="leakyrelu",
@@ -103,8 +104,7 @@ class ProtoCEM(ProtoCBM):
             )
         else:
             self.inactive_intervention_values = torch.ones(n_concepts)
-        self.pre_concept_model = x2c_model
-        
+        self.pre_concept_model = x2c_arch(output_dim=None)
         
         # X2C setup
         self.concept_context_generators = torch.nn.ModuleList()
