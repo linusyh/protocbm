@@ -1,3 +1,5 @@
+from omegaconf import DictConfig, OmegaConf
+import hydra
 from argparse import ArgumentParser
 from pathlib import Path
 import logging
@@ -14,21 +16,48 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from cem.data.CUB200 import cub_loader
 from protocbm._config import *
 from protocbm.models.protocbm import ProtoCBM
+from protocbm.models.protocem import ProtoCEM
+
+def flatten_dict(d, parent_key='', sep='.'):
+    """
+    Flatten a nested dictionary.
+
+    Parameters:
+    - d: The dictionary to flatten
+    - parent_key: The base key to use for flattening (used internally)
+    - sep: The separator between nested keys
+
+    Returns:
+    A flattened dictionary.
+    """
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict) or isinstance(v, DictConfig):
+            items.extend(flatten_dict(v, new_key, sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 
-def create_wandb_logger(args: dict):
+def create_wandb_logger(args: DictConfig):
+    args = dict(args.copy())
+    wandb_args = args.pop("wandb")
+    
     wandb_logger = WandbLogger(
         project=WANDB_PROJECT,
-        group=args.get("group", None),
-        job_type=args.get("job_type", None),
-        tags=args.get("tags", []),
-        notes=args.get("notes", None),
+        group=wandb_args.get("group", None),
+        job_type=wandb_args.get("job_type", None),
+        tags=wandb_args.get("tags", []),
+        notes=wandb_args.get("notes", None),
         # reinit=True,
-        log_model=args.get("notes", False),
+        log_model=wandb_args.get("notes", False),
         settings=wandb.Settings(start_method="thread"))
-    wandb_logger.experiment.config.update(args)  # add configuration file
-    wandb.run.name = args['run_name'] + args['suffix_wand_run_name']
-
+    
+    
+    print(flatten_dict(args))
+    wandb_logger.experiment.config.update(flatten_dict(args))  # add configuration file
+    wandb.run.name = wandb_args.run_name + wandb_args.suffix
     return wandb_logger
 
 def construct_backbone(arch, n_classes, pretrained=True):
@@ -60,142 +89,128 @@ def construct_backbone(arch, n_classes, pretrained=True):
         raise ValueError(f"Unknown architecture: {arch}")
     return backbone
 
-def protocbm_train_loop(
-    n_concepts: int,
-    n_classes: int,
-    train_dl: DataLoader,
-    val_dl: DataLoader,
-    test_dl: DataLoader,
-    # model settings
-    concept_loss_weight: float = 1.0,
-    proto_loss_weight: float = 1.0,
-    x2c_arch: str = "resnet50",
-    concept_from_logit: bool = False,
-    # DKNN settings
-    dknn_k: int = 1,
-    dknn_tau: float = 1.0,
-    dknn_method: str = "determinstic",
-    dknn_num_samples: int = -1,
-    dknn_similarity='euclidean',
-    dknn_loss_type='bce',
-    dknn_max_neighbours=-1,
-    x2c_only_epochs: int = 0,
-    epochs_proto_recompute: int = 1,
-    # optimiser settings
-    lr: float = 0.01,
-    weight_decay = 0.0005,
-    # trainer settings
-    precision: int = 32,
-    max_epochs: int = 20,
-    profiler: str = None,
-    # tensorboard settings
-    tb_log_dir: str = None,
-    tb_name: str = "porotcbm",
-    # wandb logging
-    wandb_logger: WandbLogger = None,
-    plateau_lr_scheduler_enable: bool = False,
-    plateau_lr_scheduler_monitor: str = "val_c2y_acc",
-    plateau_lr_scheduler_mode: str = "min",
-    plateau_lr_scheduler_patience: int = 10,
-    plateau_lr_scheduler_factor: float = 0.1,
-    plateau_lr_scheduler_min_lr: float = 1e-6,
-    plateau_lr_scheduler_threshold: float = 0.01,
-    plateau_lr_scheduler_cooldown: int = 0,
-    early_stop_enable: bool = True,
-    early_stop_monitor: str = "val_c2y_acc",
-    early_stop_mode: str = "max",
-    early_stop_patience: int = 3,
-    log_level: str = "INFO",
-    checkpoint_dir: str = None,
-    checkpoint_name: str = None,
-    checkpoint_n_epochs: int = None,
-    disable_wandb: bool = False,
-    use_wandb_version_for_ckpt: bool = True,
-    batch_process_fn = None,
-    **kwargs,
-):  
-    # Welcome Screen
-    print("=" * 20)
-    print("Train set size: ", len(train_dl.dataset))
-    print("Test set size: ", len(test_dl.dataset))
-    print("Val set size: ", len(val_dl.dataset))
-    print("=" * 20)
+def get_proto_model(name: str):
+    lookup = {
+        "protocbm": ProtoCBM,
+        "protocem": ProtoCEM
+    }
+    return lookup.get(name.lower(), ProtoCBM)    
+
+
+def construct_model(config: DictConfig, 
+                    proto_dl: DataLoader,
+                    batch_process_fn=None):
+    x2c_model = construct_backbone(config.model.x2c_arch, pretrained=True, n_classes=config.dataset.n_concepts)
     
-    loggers = [TensorBoardLogger(tb_log_dir, tb_name)]
-    if wandb_logger is not None:
-        loggers.append(wandb_logger)
+    model_config_dict = dict(config.model.copy())
+    model_type = model_config_dict.pop("type")
+    model_config_dict.pop('proto')
+    model_config_dict.pop('x2c_arch')
+    
+    ModelClass = get_proto_model(model_type)
+    
+    args = dict(
+        n_concepts= config.dataset.n_concepts,
+        n_tasks=config.dataset.n_classes,
+        proto_train_dl=proto_dl,
+        x2c_model=x2c_model,
+        batch_process_fn=batch_process_fn,
+        **model_config_dict
+    )
+    
+    # DKNN config
+    if config.model.proto.type.upper() == "DKNN":
+        d = dict(config.model.proto.copy())
+        d.pop('type')
+        for key, val in d.items():
+            args[f"dknn_{key}"] = val
+    
+    # optimiser config
+    optimiser_dict = dict(config.optimiser.copy())
+    opt_type = optimiser_dict.pop("type")
+    args["optimiser"] = opt_type
+    args["optimiser_params"] = optimiser_dict
+    
+    # lr scheduler config
+    lrs_dict = dict(config.lr_scheduler.copy())
+    lrs_type = lrs_dict.pop("type")
+    if lrs_type =="plateau":
+        monitor = lrs_dict.pop("monitor")
+        args["plateau_lr_scheduler_enable"] = True
+        args["plateau_lr_scheduler_monitor"] = monitor
+        args["plateau_lr_scheduler_params"] = lrs_dict
+    
+    model = ModelClass(
+        **args
+    )
+    return model
+
+
+def train_loop(
+    train_dl: DataLoader,
+    test_dl: DataLoader,
+    val_dl: DataLoader,
+    config: DictConfig,
+    batch_process_fn = None,
+):  
+    
+    # Build model
+    model = construct_model(config, train_dl, batch_process_fn)
+    
+    logging.info(str(model))
+    
+    # Welcome Screen
+    logging.info("=" * 20)
+    logging.info(f"Train set size: {len(train_dl.dataset)}")
+    logging.info(f"Test set size: {len(test_dl.dataset)}")
+    logging.info(f" Val set size: {len(val_dl.dataset)}")
+    logging.info("=" * 20)
+    
+    loggers = [TensorBoardLogger(config.tensorboard.dir, config.tensorboard.name)]
     
     # setup wandb logging
-    if not disable_wandb:
-        wandb_logger = create_wandb_logger(kwargs)
+    wandb_logger = None
+    if config.wandb.enable:
+        wandb_logger = create_wandb_logger(config)
         loggers.append(wandb_logger)
     
     # set logging level
-    logging.getLogger("lightning.pytorch").setLevel(log_level)
+    logging.getLogger("lightning.pytorch").setLevel(config.log_level)
     
     # model preparation
-    x2c_model = construct_backbone(x2c_arch, pretrained=True, n_classes=n_concepts)
-    protocbm_model = ProtoCBM(
-        n_concepts= n_concepts,
-        n_tasks=n_classes,
-        x2c_model=x2c_model,
-        concept_loss_weight=concept_loss_weight,
-        task_loss_weight=proto_loss_weight,
-        concept_from_logit=concept_from_logit,
-        dknn_k=dknn_k,
-        dknn_tau=dknn_tau,
-        dknn_method=dknn_method,
-        dknn_num_samples=dknn_num_samples,
-        dknn_similarity=dknn_similarity,
-        dknn_loss_type=dknn_loss_type,
-        dknn_max_neighbours=dknn_max_neighbours,
-        proto_train_dl=train_dl,
-        learning_rate=lr,
-        weight_decay=weight_decay,
-        epoch_proto_recompute=epochs_proto_recompute,
-        x2c_only_epochs=x2c_only_epochs,
-        plateau_lr_scheduler_enable=plateau_lr_scheduler_enable,
-        plateau_lr_scheduler_monitor=plateau_lr_scheduler_monitor,
-        plateau_lr_scheduler_mode=plateau_lr_scheduler_mode,
-        plateau_lr_scheduler_patience=plateau_lr_scheduler_patience,
-        plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
-        plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
-        plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
-        plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown,
-        batch_process_fn=batch_process_fn
-    )
+    
  
     # Careate callbacks
     callbacks = []
-    if early_stop_enable:
-        early_stop = EarlyStopping(monitor=early_stop_monitor,
-                                   mode=early_stop_mode,
-                                   patience=early_stop_patience,
+    if config.early_stop.enable:
+        early_stop = EarlyStopping(monitor=config.early_stop.monitor,
+                                   mode=config.early_stop.mode,
+                                   patience=config.early_stop.patience,
                                    verbose=True,
                                    strict=False)
         callbacks.append(early_stop)
     
-    if checkpoint_dir is not None:
-        checkpoint_dir = Path(checkpoint_dir)
-        if use_wandb_version_for_ckpt and not disable_wandb:
+    if config.ckpt.enable:
+        checkpoint_dir = Path(config.ckpt.dir)
+        if config.ckpt.use_wandb_version and config.wandb.enable:
             checkpoint_dir = checkpoint_dir / str(wandb_logger.experiment.id)
         
         checkpoint = pl.callbacks.ModelCheckpoint(
             dirpath=checkpoint_dir,
-            filename=checkpoint_name,
-            every_n_epochs=checkpoint_n_epochs,
+            filename=config.ckpt.name,
+            every_n_epochs=config.ckpt.n_epochs,
         )
         callbacks.append(checkpoint)
     
     
-    trainer = L.Trainer(max_epochs=max_epochs,
+    trainer = L.Trainer(max_epochs=config.trainer.max_epochs,
                         logger=loggers, 
-                        precision=precision, 
                         num_sanity_val_steps=0, 
                         callbacks=callbacks,
-                        profiler=profiler)
-    trainer.fit(protocbm_model, train_dl, val_dl)
-    trainer.test(protocbm_model, test_dl)
+                        precision=config.trainer.precision, 
+                        profiler=config.trainer.profiler,)
+    trainer.fit(model, train_dl, val_dl)
+    trainer.test(model, test_dl)
     
     
 def protocbm_add_common_args(parser: ArgumentParser,

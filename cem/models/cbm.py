@@ -807,7 +807,7 @@ class ConceptBottleneckModel(L.LightningModule):
     def configure_optimizers(self):
         if self.optimizer_name.lower() == "adam":
             optimizer = torch.optim.Adam(
-                self.parameters(),
+                filter(lambda p: p.requires_grad, self.parameters()),
                 lr=self.learning_rate,
                 weight_decay=self.weight_decay,
             )

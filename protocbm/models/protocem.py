@@ -3,6 +3,7 @@ from protocbm.models.protocbm import ProtoCBM
 from protocbm.dknn.dknn_layer import *
 from .utils import get_activation_fn, get_optimiser
 
+import sys
 from torch.utils.data import DataLoader
 from torchvision.models import *
 from pytorch_lightning import LightningModule
@@ -12,11 +13,11 @@ class ProtoCEM(ProtoCBM):
                  n_concepts,
                  n_tasks,
                  proto_train_dl: DataLoader,
-                 pre_concept_model=None,
+                 x2c_model=None,
                  emb_size=16,
                  training_intervention_prob=0.25,
                  embedding_activation="leakyrelu",
-                 shared_prob_gen=True,
+                 shared_prob_gen=False,
                  concept_loss_weight=0.01,
                  task_loss_weight=1,
                  output_latent=False,
@@ -25,13 +26,8 @@ class ProtoCEM(ProtoCBM):
                 #  sigmoidal_prob=True,
                 #  sigmoidal_extra_capacity=True,
                 #  bottleneck_nonlinear=None,
-                #  output_latent=False,
-                 optimizer="adam",
-                 momentum=0.9,
-                 learning_rate=0.01,
-                 weight_decay=4e-05,
-                 weight_loss=None,
-                 task_class_weights=None,
+                 optimiser="adam",
+                 optimiser_params={},
  
                  active_intervention_values=None,
                  inactive_intervention_values=None,
@@ -52,12 +48,7 @@ class ProtoCEM(ProtoCBM):
                  epoch_proto_recompute=1,
                  plateau_lr_scheduler_enable=False,
                  plateau_lr_scheduler_monitor="val_c2y_acc",
-                 plateau_lr_scheduler_mode="max",
-                 plateau_lr_scheduler_patience=10,
-                 plateau_lr_scheduler_factor=0.1,
-                 plateau_lr_scheduler_min_lr=1e-6,
-                 plateau_lr_scheduler_threshold=0.01,
-                 plateau_lr_scheduler_cooldown=0):
+                 plateau_lr_scheduler_params={}):
     
         super().__init__(n_concepts=n_concepts,
                          n_tasks=n_tasks,
@@ -66,12 +57,8 @@ class ProtoCEM(ProtoCBM):
                          task_loss_weight=task_loss_weight,
                          x2c_model=torch.nn.Identity(),  # Not needed for ProtoCEM, hence filler
                          concept_from_logit=True, # Very important, logits = actual embedding in CEM
-                         optimizer=optimizer,
-                         momentum=momentum,
-                         learning_rate=learning_rate,
-                         weight_decay=weight_decay,
-                         weight_loss=weight_loss,
-                         task_class_weights=task_class_weights,
+                         optimiser=optimiser,
+                         optimiser_params=optimiser_params,
                          batch_process_fn=batch_process_fn,
                          dknn_k=dknn_k,
                          dknn_tau=dknn_tau,
@@ -83,12 +70,7 @@ class ProtoCEM(ProtoCBM):
                          epoch_proto_recompute=epoch_proto_recompute,
                          plateau_lr_scheduler_enable=plateau_lr_scheduler_enable,
                          plateau_lr_scheduler_monitor=plateau_lr_scheduler_monitor,
-                         plateau_lr_scheduler_mode=plateau_lr_scheduler_mode,
-                         plateau_lr_scheduler_patience=plateau_lr_scheduler_patience,
-                         plateau_lr_scheduler_factor=plateau_lr_scheduler_factor,
-                         plateau_lr_scheduler_min_lr=plateau_lr_scheduler_min_lr,
-                         plateau_lr_scheduler_threshold=plateau_lr_scheduler_threshold,
-                         plateau_lr_scheduler_cooldown=plateau_lr_scheduler_cooldown)
+                         plateau_lr_scheduler_params=plateau_lr_scheduler_params)
         self.n_concepts = n_concepts
         self.n_tasks = n_tasks
         self.concept_loss_weight = concept_loss_weight
@@ -121,7 +103,7 @@ class ProtoCEM(ProtoCBM):
             )
         else:
             self.inactive_intervention_values = torch.ones(n_concepts)
-        self.pre_concept_model = pre_concept_model
+        self.pre_concept_model = x2c_model
         
         
         # X2C setup
@@ -157,7 +139,7 @@ class ProtoCEM(ProtoCBM):
                     1,
                 ))
         self.sig = torch.nn.Sigmoid()
-        self.loss_concept = torch.nn.BCELoss(weight=weight_loss)
+        self.loss_concept = torch.nn.BCELoss()
         
         # DKNN Settings
         self.proto_model = DKNN(k=dknn_k,
@@ -175,26 +157,27 @@ class ProtoCEM(ProtoCBM):
         self.dknn_loss_function = dknn_loss_factory(dknn_loss_type)
         self.dknn_max_neighbours = dknn_max_neighbours
         
-        
         self.x2c_only_epochs = x2c_only_epochs
         self.epoch_proto_recompute = epoch_proto_recompute
         
-        # Optimizer settings
-        self.optimizer = optimizer
-        self.momentum = momentum
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
-        self.weight_loss = weight_loss
-        self.task_class_weights=task_class_weights
-        self.plateau_lr_scheduler_enable = plateau_lr_scheduler_enable
-        self.plateau_lr_scheduler_monitor = plateau_lr_scheduler_monitor
-        self.plateau_lr_scheduler_mode = plateau_lr_scheduler_mode
-        self.plateau_lr_scheduler_patience = plateau_lr_scheduler_patience
-        self.plateau_lr_scheduler_factor = plateau_lr_scheduler_factor
-        self.plateau_lr_scheduler_min_lr = plateau_lr_scheduler_min_lr
-        self.plateau_lr_scheduler_threshold = plateau_lr_scheduler_threshold
-        self.plateau_lr_scheduler_cooldown = plateau_lr_scheduler_cooldown
+    def prepare_prototypes(self):
+        print("Preparing prototypes")
+        # compute a cache of concept activations as prototypes
+        list_c_activations = []
+        list_cls_labels = []
         
+        for batch in tqdm(self.proto_dataloader):
+            x, y = self._unpack_batch(batch)[:2]
+            
+            with torch.no_grad():
+                c, _ = self._run_x2c(x.to(self.device), None)
+                list_c_activations.append(c)
+                list_cls_labels.append(y.to(self.device))
+            sys.stdout.flush()
+            sys.stderr.flush()
+                
+        self.register_buffer('proto_concepts', torch.concat(list_c_activations))
+        self.register_buffer('proto_classes', torch.concat(list_cls_labels))
         
     def _after_interventions(
         self,
@@ -252,13 +235,13 @@ class ProtoCEM(ProtoCBM):
         else:
             contexts, c_sem = latent
             
-        c_pred = (
+        c_emb = (
             contexts[:, :, :self.emb_size] * torch.unsqueeze(c_sem, dim=-1) +
             contexts[:, :, self.emb_size:] * (1 - torch.unsqueeze(c_sem, dim=-1))
         )
-        c_pred = c_pred.view((-1, self.emb_size * self.n_concepts))
+        c_emb = c_emb.view((-1, self.emb_size * self.n_concepts))
 
-        return c_pred, c_sem
+        return c_emb, c_sem
     
     def _forward(
         self,

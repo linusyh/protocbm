@@ -1,0 +1,54 @@
+defaults:
+  - dataset: cub_200_312
+  - model: protocbm
+
+optimiser:
+  type: adam
+  lr: 0.00001
+  weight_decay: 0.0001
+
+lr_scheduler:
+  type: plateau
+  monitor: val_c2y_acc_cls
+  mode: max
+  patience: 10
+  factor: 0.1
+  min_lr: 1e-08
+  verbose: True
+  threshold: 0.01
+  cooldown: 0
+
+wandb:
+  enable: True
+  project: "Part3-ProtoCBM"
+  group: null
+  job_type: null
+  tags: []
+  notes: ""
+  run_name: ""
+  suffix: ""
+
+tensorboard:
+  dir: null
+  name: protocbm
+
+ckpt:
+  enable: True
+  monitor: val_loss
+  dir: "./ckpt"
+  name: "protocbm"
+  n_epochs: null
+  use_wandb_version: True
+
+trainer:
+  precision: 32
+  max_epochs: 100
+  profiler: null
+
+log_level: INFO
+
+early_stop:
+  enable: True
+  monitor: val_c2y_acc_cls
+  mode: max
+  patience: 10

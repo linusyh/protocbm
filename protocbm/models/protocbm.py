@@ -1,5 +1,6 @@
 from cem.models.cbm import *
 from protocbm.model import *
+from protocbm.models.utils import *
 from protocbm.dknn.dknn_layer import *
 
 import sys
@@ -53,11 +54,8 @@ class ProtoCBM(ConceptBottleneckModel):
                  x2c_model=None,
                  c_extractor_arch=utils.wrap_pretrained_model(resnet50),
  
-                 optimizer="adam",
-                 momentum=0.9,
-                 learning_rate=0.01,
-                 weight_decay=4e-05,
-                 weight_loss=None,
+                 optimiser="adam",
+                 optimiser_params={},
                  task_class_weights=None,
  
                  active_intervention_values=None,
@@ -81,12 +79,7 @@ class ProtoCBM(ConceptBottleneckModel):
                  epoch_proto_recompute=1,
                  plateau_lr_scheduler_enable=False,
                  plateau_lr_scheduler_monitor="val_c2y_acc",
-                 plateau_lr_scheduler_mode="max",
-                 plateau_lr_scheduler_patience=10,
-                 plateau_lr_scheduler_factor=0.1,
-                 plateau_lr_scheduler_min_lr=1e-6,
-                 plateau_lr_scheduler_threshold=0.01,
-                 plateau_lr_scheduler_cooldown=0):
+                 plateau_lr_scheduler_params={}):
         
        
         proto_model = DKNN(k=dknn_k,
@@ -110,12 +103,7 @@ class ProtoCBM(ConceptBottleneckModel):
             c_extractor_arch=c_extractor_arch,
             c2y_model=proto_model,
             c2y_layers=None,
-            
-            optimizer=optimizer,
-            momentum=momentum,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            weight_loss=weight_loss,
+            optimizer=optimiser,
             task_class_weights=task_class_weights,
             active_intervention_values=active_intervention_values,
             inactive_intervention_values=inactive_intervention_values,
@@ -146,13 +134,10 @@ class ProtoCBM(ConceptBottleneckModel):
         self.concept_from_logit = concept_from_logit
         self.plateau_lr_scheduler_enable = plateau_lr_scheduler_enable
         self.plateau_lr_scheduler_monitor = plateau_lr_scheduler_monitor
-        self.plateau_lr_scheduler_mode = plateau_lr_scheduler_mode
-        self.plateau_lr_scheduler_patience = plateau_lr_scheduler_patience
-        self.plateau_lr_scheduler_factor = plateau_lr_scheduler_factor
-        self.plateau_lr_scheduler_min_lr = plateau_lr_scheduler_min_lr
-        self.plateau_lr_scheduler_threshold = plateau_lr_scheduler_threshold
-        self.plateau_lr_scheduler_cooldown = plateau_lr_scheduler_cooldown
-    
+        self.plateau_lr_scheduler_params = plateau_lr_scheduler_params
+        
+        self.optimiser = optimiser
+        self.optimiser_params = optimiser_params
     
     def _unpack_batch(self, batch):
         if self.batch_process_fn is not None:
@@ -195,16 +180,12 @@ class ProtoCBM(ConceptBottleneckModel):
     
     def configure_optimizers(self):
         objects = {}
-        objects['optimizer'] = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        OPTIM_CLASS = get_optimiser(self.optimiser)
+        objects['optimizer'] = OPTIM_CLASS(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         if self.plateau_lr_scheduler_enable:
             objects['lr_scheduler'] = {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(objects['optimizer'],
-                                                                        mode=self.plateau_lr_scheduler_mode,
-                                                                        patience=self.plateau_lr_scheduler_patience,
-                                                                        factor=self.plateau_lr_scheduler_factor,
-                                                                        min_lr=self.plateau_lr_scheduler_min_lr,
-                                                                        threshold=self.plateau_lr_scheduler_threshold,
-                                                                        cooldown=self.plateau_lr_scheduler_cooldown,),
+                                                                        **self.plateau_lr_scheduler_params),
                 "monitor": self.plateau_lr_scheduler_monitor,
                 "strict": False,
             }
