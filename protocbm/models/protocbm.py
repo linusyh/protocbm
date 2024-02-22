@@ -51,9 +51,9 @@ class ProtoCBM(ConceptBottleneckModel):
                  sigmoidal_extra_capacity=True,
                  bottleneck_nonlinear=None,
                  output_latent=False,
- 
-                 x2c_arch=partial(get_backbone, "resnet18"),
- 
+                 x2c_model=None,
+                 x2c_arch="resnet18",
+
                  optimiser="adam",
                  optimiser_params={},
                  task_class_weights=None,
@@ -99,8 +99,8 @@ class ProtoCBM(ConceptBottleneckModel):
             sigmoidal_extra_capacity=sigmoidal_extra_capacity,
             bottleneck_nonlinear=bottleneck_nonlinear,
             output_latent=output_latent,
-            x2c_model=None,
-            c_extractor_arch=x2c_arch,
+            x2c_model=x2c_model,
+            c_extractor_arch=partial(get_backbone, x2c_arch),
             c2y_model=proto_model,
             c2y_layers=None,
             optimizer=optimiser,
@@ -120,7 +120,7 @@ class ProtoCBM(ConceptBottleneckModel):
         self.dknn_num_samples = dknn_num_samples
         self.dknn_simiarity = dknn_similarity
         self.dknn_loss_type = dknn_loss_type        
-        self.dknn_loss_function = dknn_loss_factory(dknn_loss_type)
+        self.dknn_loss_function = dknn_loss_factory(dknn_loss_type, k=dknn_k)
         self.dknn_max_neighbours = dknn_max_neighbours
         self.proto_model = proto_model
         
@@ -255,7 +255,7 @@ class ProtoCBM(ConceptBottleneckModel):
             # Will only compute the concept loss for concepts whose certainty
             # values are fully given
             if self.include_certainty:
-                concept_loss = self.loss_concept(c_sem, c)
+                concept_loss = self.loss_concept(c_sem, c.float())
                 concept_loss_scalar = concept_loss.detach()
             else:
                 c_sem_used = torch.where(

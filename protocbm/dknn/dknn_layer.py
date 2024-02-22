@@ -7,9 +7,10 @@ a certain neighbor is one of the k nearest neighbors to the query.
 At the limit of tau = 0, each entry is a binary value representing
 whether each neighbor is actually one of the k closest to each query.
 '''
-
+from typing import *
 import torch
 import torch.nn.functional as F
+from torch.nn.modules.loss import _Loss
 import numpy as np
 
 from protocbm.dknn.neuralsort import NeuralSort
@@ -17,7 +18,7 @@ from protocbm.dknn.pl import PL
 
 
 class DKNNLossSparseWeighted(torch.nn.Module):
-    def __init__(self, positive_weight=1.0, negative_weight=1.0):
+    def __init__(self, positive_weight=1.0, negative_weight=1.0, **kwargs):
         super(DKNNLossSparseWeighted, self).__init__()
         self.positive_weight = positive_weight
         self.negative_weight = negative_weight
@@ -31,7 +32,7 @@ class DKNNLossSparseWeighted(torch.nn.Module):
     
 
 class DKNNLoss(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(DKNNLoss, self).__init__()
     
     def forward(self, dknn_output, truth):
@@ -39,25 +40,41 @@ class DKNNLoss(torch.nn.Module):
 
 
 class DKNNInverseLoss(torch.nn.Module):
-    def __init__(self):
+    def __init__(self,**kwargs):
         super(DKNNInverseLoss, self).__init__()
     
     def forward(self, dknn_output, truth):
         return (1/(dknn_output * truth)).sum()
+    
+class DKNNBCEwithLogitLoss(_Loss):
+    def __init__(self, k: float, **kwargs):
+        super(DKNNBCEwithLogitLoss, self).__init__(**kwargs)
+        self.k = k
+    
+    def forward(self, dknn_output, truth):
+        return F.binary_cross_entropy_with_logits(dknn_output/self.k, truth, reduction=self.reduction)
 
+class DKNNMSELoss(_Loss):
+    def __init__(self, k: float, **kwargs):
+        super(DKNNMSELoss, self).__init__(**kwargs)
+        self.k = k
+    
+    def forward(self, dknn_output, truth):
+        return F.mse_loss(dknn_output/self.k, truth, reduction=self.reduction)
 
 DKNN_LOSS_LOOKUP = {
     "minus_count": DKNNLoss,
     "inverse_count": DKNNInverseLoss,
     "sparse_weighted": DKNNLossSparseWeighted,
-    "bce": torch.nn.BCEWithLogitsLoss,
-    "mse": torch.nn.MSELoss
+    "bce": DKNNBCEwithLogitLoss,
+    "mse": DKNNMSELoss
 }
 
-def dknn_loss_factory(loss_str: str) -> torch.nn.Module:
+def dknn_loss_factory(loss_str: str, k: float) -> torch.nn.Module:
     loss_str = loss_str.strip().lower()
+    
     if loss_str in DKNN_LOSS_LOOKUP.keys():
-        return DKNN_LOSS_LOOKUP[loss_str]()
+        return DKNN_LOSS_LOOKUP[loss_str](k=k)
     elif loss_str.startswith("sparse_weighted"):
         parts = loss_str.split("_")
         if len(parts) == 3:

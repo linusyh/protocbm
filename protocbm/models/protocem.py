@@ -1,7 +1,7 @@
 from cem.models.cbm import *
 from protocbm.models.protocbm import ProtoCBM
 from protocbm.dknn.dknn_layer import *
-from .utils import get_activation_fn, get_optimiser
+from .utils import *
 
 import sys
 from functools import partial
@@ -14,7 +14,7 @@ class ProtoCEM(ProtoCBM):
                  n_concepts,
                  n_tasks,
                  proto_train_dl: DataLoader,
-                 x2c_arch=partial(resnet18, pretrained=True),
+                 x2c_arch="resnet18",
                  emb_size=16,
                  training_intervention_prob=0.25,
                  embedding_activation="leakyrelu",
@@ -56,8 +56,9 @@ class ProtoCEM(ProtoCBM):
                          proto_train_dl=proto_train_dl,
                          concept_loss_weight=concept_loss_weight,
                          task_loss_weight=task_loss_weight,
-                         x2c_model=torch.nn.Identity(),  # Not needed for ProtoCEM, hence filler
-                         concept_from_logit=True, # Very important, logits = actual embedding in CEM
+                         x2c_model=get_backbone(x2c_arch, output_dim=None),
+                         x2c_arch=None, 
+                         concept_from_logit=True,
                          optimiser=optimiser,
                          optimiser_params=optimiser_params,
                          batch_process_fn=batch_process_fn,
@@ -104,7 +105,7 @@ class ProtoCEM(ProtoCBM):
             )
         else:
             self.inactive_intervention_values = torch.ones(n_concepts)
-        self.pre_concept_model = x2c_arch(output_dim=None)
+        self.pre_concept_model = self.x2c_model
         
         # X2C setup
         self.concept_context_generators = torch.nn.ModuleList()
