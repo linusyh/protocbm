@@ -198,20 +198,8 @@ def dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k):
                 divisor = (counts==label_count).sum()
                 if divisor > 0:
                     accuracies.append(1/divisor)
-                else:
-                    print(pred)
-                    print(label)
-                    print(uniques)
-                    print(counts)
-                    accuracies.append(0)
-        else:
-            accuracies.append(0)
     
     if len(accuracies) == 0:
-        print("==EMPTY ACCURACIES==")
-        print(dknn_output.shape)
-        print(neighbour_label.shape)
-        print(target_label.shape)
         return 0
     return np.mean(accuracies)
     
