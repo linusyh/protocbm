@@ -29,13 +29,13 @@ wandb:
   suffix: ""
 
 tensorboard:
-  dir: null
+  dir: "/tmp/protocbm/tensorboard/"
   name: protocbm
 
 ckpt:
   enable: True
   monitor: val_loss
-  dir: "./ckpt"
+  dir: "/tmp/protocbm/ckpt"
   name: "protocbm"
   n_epochs: null
   use_wandb_version: True
