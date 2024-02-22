@@ -155,7 +155,7 @@ class ProtoCEM(ProtoCBM):
         self.dknn_num_samples = dknn_num_samples
         self.dknn_simiarity = dknn_similarity
         self.dknn_loss_type = dknn_loss_type        
-        self.dknn_loss_function = dknn_loss_factory(dknn_loss_type)
+        self.dknn_loss_function = dknn_loss_factory(dknn_loss_type, k=dknn_k)
         self.dknn_max_neighbours = dknn_max_neighbours
         
         self.x2c_only_epochs = x2c_only_epochs
