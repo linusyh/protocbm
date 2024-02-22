@@ -47,7 +47,6 @@ class ProtoCBM(ConceptBottleneckModel):
  
                  extra_dims=0,
                  bool=False,
-                 sigmoidal_prob=True,
                  sigmoidal_extra_capacity=True,
                  bottleneck_nonlinear=None,
                  output_latent=False,
@@ -95,7 +94,7 @@ class ProtoCBM(ConceptBottleneckModel):
             task_loss_weight=task_loss_weight,
             extra_dims=extra_dims,
             bool=bool,
-            sigmoidal_prob=sigmoidal_prob,
+            sigmoidal_prob=not concept_from_logit,
             sigmoidal_extra_capacity=sigmoidal_extra_capacity,
             bottleneck_nonlinear=bottleneck_nonlinear,
             output_latent=output_latent,
