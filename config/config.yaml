@@ -2,6 +2,10 @@ defaults:
   - dataset: cub_200_312
   - model: protocbm
 
+universal:
+  monitor: val_c2y_acc_cls
+  mode: max
+
 optimiser:
   type: adam
   lr: 0.00001
@@ -9,8 +13,8 @@ optimiser:
 
 lr_scheduler:
   type: plateau
-  monitor: val_c2y_acc_cls
-  mode: max
+  monitor: ${universal.monitor}
+  mode: ${universal.mode}
   patience: 10
   factor: 0.1
   min_lr: 1e-08
@@ -49,6 +53,6 @@ log_level: INFO
 
 early_stop:
   enable: True
-  monitor: val_c2y_acc_cls
-  mode: max
+  monitor: ${universal.monitor}
+  mode: ${universal.mode}
   patience: 10
