@@ -5,4 +5,4 @@ method: deterministic
 num_samples: -1
 similarity: euclidean
 loss_type: sparse_weighted
-max_neighbours: 20
+max_neighbours: -1
