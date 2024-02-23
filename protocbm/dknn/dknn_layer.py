@@ -201,7 +201,7 @@ def dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k):
     
     if len(accuracies) == 0:
         return 0
-    return np.mean(accuracies)
+    return np.sum(accuracies) / len(accuracies)
     
 def dknn_results_analysis(dknn_output, neighbour_label, target_label, k):
     class_acc = dknn_cal_class_accuracy(dknn_output, neighbour_label, target_label, k)
