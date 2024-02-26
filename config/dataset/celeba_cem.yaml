@@ -1,0 +1,15 @@
+name: "CELEBA_CEM"
+num_workers: 15
+batch_size: 16
+root_dir: ../data/CelebA_torch/
+n_classes: 256
+
+# Mateo's code specific
+n_concepts: 6
+image_size: 64
+use_binary_vector_class: true
+label_binary_width: 1
+num_concepts: 6
+num_hidden_concepts: 2
+label_dataset_subsample: 12
+weight_loss: false

@@ -111,6 +111,7 @@ def generate_data(
     root_dir=DATASET_DIR,
     seed=42,
     output_dataset_vars=False,
+    train_shuffle=False,
 ):
     if root_dir is None:
         root_dir = DATASET_DIR
@@ -340,7 +341,7 @@ def generate_data(
     train_dl = torch.utils.data.DataLoader(
         celeba_train_data,
         batch_size=config['batch_size'],
-        shuffle=True,
+        shuffle=train_shuffle,
         num_workers=config['num_workers'],
     )
     test_dl = torch.utils.data.DataLoader(
