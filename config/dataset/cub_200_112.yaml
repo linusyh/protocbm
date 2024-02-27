@@ -5,3 +5,7 @@ root_dir: ???
 pkl_dir: ???
 n_classes: 200
 n_concepts: 112
+
+# normalizer config
+x_mean: ${universal.x_mean}
+x_std: ${universal.x_std}

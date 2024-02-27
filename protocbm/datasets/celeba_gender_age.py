@@ -15,7 +15,9 @@ def load_celeba_subsets(root: str,
                         subset_indices_file: str,
                         train_transform=None,
                         val_test_transform=None,
-                        download: bool = False,):
+                        download: bool = False,
+                        x_mean=[0.485, 0.456, 0.406],
+                        x_std=[0.229, 0.224, 0.225]):
     
     with open(subset_indices_file, 'rb') as f:
         sel_indices = pickle.load(f)
@@ -26,14 +28,14 @@ def load_celeba_subsets(root: str,
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.ColorJitter(0.1),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=x_mean, std=x_std)
         ])
     
     if val_test_transform is None:
         val_test_transform = transforms.Compose([
             transforms.CenterCrop((320,320)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=x_mean, std=x_std)
         ])
     
     sel_attribute_positive = torch.tensor([False] * NUM_CONCEPTS)

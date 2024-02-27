@@ -901,6 +901,8 @@ def load_data(
     shuffle=False,
     is_training=False,
     use_cbm_concept_subset=False,
+    x_mean=[0.485, 0.456, 0.406],
+    x_std=[0.229, 0.224, 0.225],
 ):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
@@ -924,7 +926,7 @@ def load_data(
                 transforms.RandomResizedCrop(resol),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(), #implicitly divides by 255
-                transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+                transforms.Normalize(mean=x_mean, std=x_std)
             ])
     else:
         if is_chexpert:
@@ -936,7 +938,7 @@ def load_data(
             transform = transforms.Compose([
                 transforms.CenterCrop(resol),
                 transforms.ToTensor(), #implicitly divides by 255
-                transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+                transforms.Normalize(mean=x_mean, std=x_std)
             ])
 
     dataset = CUBDataset(

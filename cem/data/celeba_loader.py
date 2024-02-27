@@ -112,6 +112,8 @@ def generate_data(
     seed=42,
     output_dataset_vars=False,
     train_shuffle=False,
+    x_mean=[0.485, 0.456, 0.406],
+    x_std=[0.229, 0.224, 0.225],
 ):
     if root_dir is None:
         root_dir = DATASET_DIR
@@ -177,7 +179,7 @@ def generate_data(
                 transforms.CenterCrop(config['image_size']),
                 transforms.ToTensor(),
                 transforms.ConvertImageDtype(torch.float32),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                transforms.Normalize(mean=x_mean, std=x_std),
             ]),
             target_transform=lambda x: [
                 torch.tensor(
@@ -216,7 +218,7 @@ def generate_data(
                 transforms.CenterCrop(config['image_size']),
                 transforms.ToTensor(),
                 transforms.ConvertImageDtype(torch.float32),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                transforms.Normalize(mean=x_mean, std=x_std),
             ]),
             target_transform=lambda x: [
                 torch.tensor(
@@ -296,7 +298,7 @@ def generate_data(
                 transforms.CenterCrop(config['image_size']),
                 transforms.ToTensor(),
                 transforms.ConvertImageDtype(torch.float32),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                transforms.Normalize(mean=x_mean, std=x_std),
             ]),
             target_transform=lambda x: [
                 torch.tensor(
