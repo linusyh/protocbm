@@ -68,9 +68,9 @@ def build_cub(dataset_config: DictConfig):
 def build_celeba_cem(dataset_config: DictConfig):
     cem_config = dict(
         image_size=dataset_config.get('image_size', 64),
-        num_classes=dataset_config.get('num_classes', 1000),
+        num_classes=dataset_config.get('n_classes', 1000),
         label_binary_width=dataset_config.get('label_binary_width', 1),
-        num_concepts=dataset_config.get('num_concepts',6),
+        num_concepts=dataset_config.get('n_concepts',6),
         num_hidden_concepts=dataset_config.get('num_hidden_concepts', 2),
         label_dataset_subsample=dataset_config.get('label_dataset_subsample', 12),
         use_binary_vector_class=dataset_config.get('use_binary_vector_class', True),
