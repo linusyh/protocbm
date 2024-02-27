@@ -1,8 +1,8 @@
 name: "CELEBA_GENDERAGE_4000"
 num_workers: 15
 batch_size: 16
-root_dir: ../data/CelebA_torch/
-subset_file: ../data/CelebA/subsets/balanced_respecting/400.pkl
+root_dir: ./data/CelebA_torch/
+subset_file: ./data/CelebA/subsets/balanced_respecting/400.pkl
 n_classes: 4
 n_concepts: 38
 

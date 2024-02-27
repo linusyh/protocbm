@@ -1,8 +1,8 @@
 name: "CUB_200_112"
 num_workers: 15
 batch_size: 16
-root_dir: ???
-pkl_dir: ???
+root_dir: ./data/CUB200/
+pkl_dir: ./data/CUB200/pkl/
 n_classes: 200
 n_concepts: 112
 

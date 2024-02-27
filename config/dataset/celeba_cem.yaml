@@ -1,7 +1,7 @@
 name: "CELEBA_CEM"
 num_workers: 15
 batch_size: 16
-root_dir: ../data/CelebA_torch/
+root_dir: ./data/CelebA_torch/
 n_classes: 256
 n_concepts: 6
 
