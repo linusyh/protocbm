@@ -180,7 +180,7 @@ class ProtoCBM(ConceptBottleneckModel):
     def configure_optimizers(self):
         objects = {}
         OPTIM_CLASS = get_optimiser(self.optimiser)
-        objects['optimizer'] = OPTIM_CLASS(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        objects['optimizer'] = OPTIM_CLASS(self.parameters(), **self.optimiser_params)
         if self.plateau_lr_scheduler_enable:
             objects['lr_scheduler'] = {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(objects['optimizer'],
