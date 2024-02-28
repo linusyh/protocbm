@@ -73,6 +73,7 @@ class ProtoCBM(ConceptBottleneckModel):
                  dknn_num_samples=-1,
                  dknn_similarity="euclidean",
                  dknn_loss_type="minus_count",
+                 dknn_loss_params={},
                  dknn_max_neighbours=-1,
                  x2c_only_epochs=0,
                  epoch_proto_recompute=1,
@@ -119,7 +120,8 @@ class ProtoCBM(ConceptBottleneckModel):
         self.dknn_num_samples = dknn_num_samples
         self.dknn_simiarity = dknn_similarity
         self.dknn_loss_type = dknn_loss_type        
-        self.dknn_loss_function = dknn_loss_factory(dknn_loss_type, k=dknn_k)
+        self.dknn_loss_params = dknn_loss_params
+        self.dknn_loss_function = dknn_loss_factory(dknn_loss_type, k=dknn_k, **dknn_loss_params)
         self.dknn_max_neighbours = dknn_max_neighbours
         self.proto_model = proto_model
         

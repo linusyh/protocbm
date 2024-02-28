@@ -8,6 +8,7 @@ At the limit of tau = 0, each entry is a binary value representing
 whether each neighbor is actually one of the k closest to each query.
 '''
 from typing import *
+import logging
 import torch
 import torch.nn.functional as F
 from torch.nn.modules.loss import _Loss
@@ -20,15 +21,17 @@ from protocbm.dknn.pl import PL
 class DKNNLossSparseWeighted(torch.nn.Module):
     def __init__(self, positive_weight=1.0, negative_weight=1.0, **kwargs):
         super(DKNNLossSparseWeighted, self).__init__()
+        logging.info(f"DKNNLossSparseWeighted initialised with pos={positive_weight} neg={negative_weight}")
         self.positive_weight = positive_weight
         self.negative_weight = negative_weight
     
     def forward(self, dknn_output, truth):
+        weight_factor = self.positive_weight + self.negative_weight
         is_positive = truth.sum()
         amplification = torch.where(truth==1, 
                                     self.positive_weight * -1 / is_positive,
                                     self.negative_weight / (dknn_output.nelement()-is_positive))
-        return (dknn_output * amplification).sum()
+        return (dknn_output * amplification).sum() / weight_factor
     
 
 class DKNNLoss(torch.nn.Module):
@@ -70,22 +73,11 @@ DKNN_LOSS_LOOKUP = {
     "mse": DKNNMSELoss
 }
 
-def dknn_loss_factory(loss_str: str, k: float) -> torch.nn.Module:
+def dknn_loss_factory(loss_str: str, k: float, **kwargs) -> torch.nn.Module:
     loss_str = loss_str.strip().lower()
     
     if loss_str in DKNN_LOSS_LOOKUP.keys():
-        return DKNN_LOSS_LOOKUP[loss_str](k=k)
-    elif loss_str.startswith("sparse_weighted"):
-        parts = loss_str.split("_")
-        if len(parts) == 3:
-            positive_weight = float(parts[2])
-            return DKNNLossSparseWeighted(positive_weight=positive_weight)
-        elif len(parts) == 4:
-            positive_weight = float(parts[2])
-            negative_weight = float(parts[3])
-            return DKNNLossSparseWeighted(positive_weight=positive_weight, negative_weight=negative_weight)
-        else:
-            raise ValueError(f"Invalid sparse_weighted loss function: {loss_str}")
+        return DKNN_LOSS_LOOKUP[loss_str](k=k, **kwargs)
     else:
         raise ValueError(f"Unknown loss function: {loss_str}")
 
