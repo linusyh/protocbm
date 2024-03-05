@@ -50,16 +50,16 @@ class DKNNInverseLoss(torch.nn.Module):
         return (1/(dknn_output * truth)).sum()
     
 class DKNNBCEwithLogitLoss(_Loss):
-    def __init__(self, k: float, **kwargs):
-        super(DKNNBCEwithLogitLoss, self).__init__(**kwargs)
+    def __init__(self, k: float, reduction = 'mean', **kwargs):
+        super(DKNNBCEwithLogitLoss, self).__init__(reduction=reduction)
         self.k = k
     
     def forward(self, dknn_output, truth):
         return F.binary_cross_entropy_with_logits(dknn_output/self.k, truth, reduction=self.reduction)
 
 class DKNNMSELoss(_Loss):
-    def __init__(self, k: float, **kwargs):
-        super(DKNNMSELoss, self).__init__(**kwargs)
+    def __init__(self, k: float, reduction = 'mean', **kwargs):
+        super(DKNNMSELoss, self).__init__(reduction=reduction)
         self.k = k
     
     def forward(self, dknn_output, truth):
