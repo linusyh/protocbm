@@ -1,4 +1,3 @@
-import cem.metrics.oracle as purity
 import numpy as np
 import warnings
 
@@ -30,6 +29,7 @@ def concept_alignment_score(
     # First lets compute an alignment between concept
     # scores and ground truth concepts
     if force_alignment:
+        import cem.metrics.oracle as purity
         if alignment is None:
             purity_mat = purity.concept_purity_matrix(
                 c_soft=c_vec,
