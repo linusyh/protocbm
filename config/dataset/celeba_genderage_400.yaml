@@ -1,4 +1,4 @@
-name: "CELEBA_GENDERAGE_4000"
+name: "CELEBA_GENDERAGE_400"
 num_workers: 15
 batch_size: 16
 root_dir: ./data/CelebA_torch/

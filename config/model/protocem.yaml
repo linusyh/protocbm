@@ -1,13 +1,10 @@
 defaults:
+  - common
+  - _self_
   - proto: dknn
 
 type: "ProtoCEM"
-concept_loss_weight: 1.0
-task_loss_weight: 1.0
-x2c_arch: resnet18
-emb_size: 16
+emb_size: 32
 training_intervention_prob: 0.0
-x2c_only_epochs: 0
-epoch_proto_recompute: 1
 shared_prob_gen: False
 embedding_activation: sigmoid

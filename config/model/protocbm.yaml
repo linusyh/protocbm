@@ -1,13 +1,10 @@
 defaults:
+  - common
+  - _self_
   - proto: dknn
 
 type: "ProtoCBM"
-concept_loss_weight: 1.0
-task_loss_weight: 1.0
-x2c_arch: resnet18
 concept_from_logit: False
-x2c_only_epochs: 0
-epoch_proto_recompute: 1
 extra_dims: 0
 bool: False
 sigmoidal_prob: True
