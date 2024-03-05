@@ -12,8 +12,8 @@ import lightning as L
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+import hydra
 
-from cem.data.CUB200 import cub_loader
 from cem.metrics.cas import concept_alignment_score
 from protocbm._config import *
 from protocbm.models.protocbm import ProtoCBM
@@ -43,23 +43,12 @@ def flatten_dict(d, parent_key='', sep='.'):
 
 
 def create_wandb_logger(args: DictConfig):
-    args = dict(args.copy())
-    wandb_args = args.pop("wandb")
     
-    wandb_logger = WandbLogger(
-        project=WANDB_PROJECT,
-        group=wandb_args.get("group", None),
-        job_type=wandb_args.get("job_type", None),
-        tags=wandb_args.get("tags", []),
-        notes=wandb_args.get("notes", None),
-        # reinit=True,
-        log_model=wandb_args.get("notes", False),
-        settings=wandb.Settings(start_method="thread"))
+    wandb_logger = hydra.utils.instantiate(args.wandb)
     
     
-    logging.debug(flatten_dict(args))
+    logging.debug(flatten_dict(dict(args).pop("wandb")))
     wandb_logger.experiment.config.update(flatten_dict(args))  # add configuration file
-    wandb.run.name = wandb_args.run_name + wandb_args.suffix
     return wandb_logger
 
 
@@ -128,8 +117,6 @@ def train_loop(
     # Build model
     model = construct_model(config, train_dl, batch_process_fn)
     
-    logging.debug(str(model))
-    
     # Welcome Screen
     logging.info("=" * 20)
     logging.info(f"Train set size: {len(train_dl.dataset)}")
@@ -142,38 +129,23 @@ def train_loop(
     if "tensorboard" in config.keys():
         loggers.append(TensorBoardLogger(config.tensorboard.dir, name=config.tensorboard.name))
         
-    # setup wandb logging
+    # Setup wandb logging
     wandb_logger = None
-    if config.wandb.enable:
+    if "wandb" in config.keys():
         wandb_logger = create_wandb_logger(config)
         loggers.append(wandb_logger)
     
-    # set logging level
+    # Set logging level
     logging.getLogger("lightning.pytorch").setLevel(config.log_level)    
  
-    # Careate callbacks
+    # create callbacks
     callbacks = []
-    if config.early_stop.enable:
-        early_stop = EarlyStopping(monitor=config.early_stop.monitor,
-                                   mode=config.early_stop.mode,
-                                   patience=config.early_stop.patience,
-                                   verbose=True,
-                                   strict=False)
-        callbacks.append(early_stop)
+    for name, cb_conf in config.callbacks.items():
+        logging.warn(f"Creating callback: {name}")
+        cb = hydra.utils.instantiate(cb_conf)
+        callbacks.append(cb)
     
-    if config.ckpt.enable:
-        checkpoint_dir = Path(config.ckpt.dir)
-        if config.ckpt.use_wandb_version and config.wandb.enable:
-            checkpoint_dir = checkpoint_dir / str(wandb_logger.experiment.id)
-        
-        checkpoint = pl.callbacks.ModelCheckpoint(
-            dirpath=checkpoint_dir,
-            filename=config.ckpt.name,
-            every_n_epochs=config.ckpt.n_epochs,
-        )
-        callbacks.append(checkpoint)
-    
-    
+    # Training
     trainer = L.Trainer(max_epochs=config.trainer.max_epochs,
                         logger=loggers, 
                         num_sanity_val_steps=0, 
@@ -183,6 +155,7 @@ def train_loop(
     trainer.fit(model, train_dl, val_dl)
     trainer.test(model, test_dl)
     
+    # Run expensive evaluation metrics only for test set
     if "evaluation" in config.keys():
         if "cas" in config.evaluation.keys():
             # Aggregate predictions

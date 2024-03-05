@@ -1,8 +1,10 @@
+defaults:
+  - _default
+  - _self_
+
 name: "CUB_200_112"
-num_workers: 15
-batch_size: 16
-root_dir: ./data/CUB200/
-pkl_dir: ./data/CUB200/pkls/
+root_dir: ${universal.data_path}/CUB200/
+pkl_dir: ${universal.data_path}/CUB200/pkls/
 n_classes: 200
 n_concepts: 112
 

@@ -1,0 +1,7 @@
+defaults:
+  - _default
+  - _self_
+  
+root_dir: ${universal.data_path}/CelebA_torch/
+x_mean: ${universal.x_mean}
+x_std: ${universal.x_std}

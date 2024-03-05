@@ -1,7 +1,8 @@
+defaults:
+  - _default_celeba
+  - _self_
+
 name: "CELEBA_CEM"
-num_workers: 15
-batch_size: 16
-root_dir: ./data/CelebA_torch/
 n_classes: 256
 n_concepts: 6
 
@@ -13,6 +14,4 @@ num_hidden_concepts: 2
 label_dataset_subsample: 12
 weight_loss: false
 
-# normalizer config
-x_mean: ${universal.x_mean}
-x_std: ${universal.x_std}
+
