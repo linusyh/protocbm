@@ -58,3 +58,7 @@ early_stop:
   monitor: ${universal.monitor}
   mode: ${universal.mode}
   patience: 10
+
+evaluation:
+  cas:
+    step: 50

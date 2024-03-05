@@ -14,9 +14,11 @@ from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from cem.data.CUB200 import cub_loader
+from cem.metrics.cas import concept_alignment_score
 from protocbm._config import *
 from protocbm.models.protocbm import ProtoCBM
 from protocbm.models.protocem import ProtoCEM
+from protocbm.models.utils import aggregate_predictions
 
 def flatten_dict(d, parent_key='', sep='.'):
     """
@@ -180,6 +182,25 @@ def train_loop(
                         profiler=config.trainer.profiler,)
     trainer.fit(model, train_dl, val_dl)
     trainer.test(model, test_dl)
+    
+    if "evaluation" in config.keys():
+        if "cas" in config.evaluation.keys():
+            # Aggregate predictions
+            raw_pred = trainer.predict(model, test_dl)
+            pred = aggregate_predictions(raw_pred)
+            
+            # Calculate CAS score
+            cas = concept_alignment_score(
+                c_vec = pred["c_emb"],
+                y_test = pred["y"],
+                c_test = pred["c"],
+                step = config.evaluation.cas.step,
+            )
+            
+            if wandb_logger:
+                wandb_logger.experiment.log({"test_cas": cas[0]})
+            else:
+                logging.log(f"Test CAS: {cas[0]}")
     
     
 def protocbm_add_common_args(parser: ArgumentParser,
