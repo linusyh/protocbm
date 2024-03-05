@@ -5,6 +5,8 @@ import torch
 from torch.utils.data import Subset, DataLoader
 from torchvision.datasets import CelebA
 from torchvision import transforms
+import lightning as L
+
 
 SELECTED_CONCEPTS = [20, 39]
 CONCEPT_NAMES = ['Young_Male', 'Young_Female', 'Old_Male', 'Old_Female']
@@ -21,10 +23,12 @@ def load_celeba_subsets(root: str,
     
     with open(subset_indices_file, 'rb') as f:
         sel_indices = pickle.load(f)
+        
+    image_size = config.get('image_size', 64)
     
     if train_transform is None:
         train_transform = transforms.Compose([
-            transforms.CenterCrop((320,320)),
+            transforms.CenterCrop((image_size,image_size)),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.ColorJitter(0.1),
             transforms.ToTensor(),
@@ -33,7 +37,7 @@ def load_celeba_subsets(root: str,
     
     if val_test_transform is None:
         val_test_transform = transforms.Compose([
-            transforms.CenterCrop((320,320)),
+            transforms.CenterCrop((image_size,image_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=x_mean, std=x_std)
         ])

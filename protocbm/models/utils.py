@@ -1,6 +1,7 @@
 import torch
 import torchvision
 
+
 def get_activation_fn(name="relu"):
     if name == "relu":
         return torch.nn.ReLU
@@ -55,3 +56,15 @@ def get_backbone(arch, output_dim, pretrained=True):
     else:
         raise ValueError(f"Unknown architecture: {arch}")
     return backbone
+
+
+def aggregate_predictions(predictions):
+    assert len(predictions) > 0, "Predictions list is empty."
+    
+    output = {key: [] for key in predictions[0].keys()}
+    for pred in predictions:
+        for key, value in pred.items():
+            output[key].append(value)
+    return {
+        k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v for k, v in output.items()
+    }

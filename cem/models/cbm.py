@@ -618,10 +618,9 @@ class ConceptBottleneckModel(L.LightningModule):
         batch,
         batch_idx,
         intervention_idxs=None,
-        dataloader_idx=0,
     ):
         x, y, (c, competencies, prev_interventions) = self._unpack_batch(batch)
-        return self._forward(
+        results = self._forward(
             x,
             intervention_idxs=intervention_idxs,
             c=c,
@@ -631,6 +630,16 @@ class ConceptBottleneckModel(L.LightningModule):
             prev_interventions=prev_interventions,
             batch_idx=batch_idx,
         )
+        
+        c_prob, c_embedding = results[0], results[1]
+        return {
+            "c": c,
+            "c_prob": c_prob,
+            "c_emb": c_embedding,
+            "y": y
+        } 
+        
+        
         
     def _cal_loss(self, c, c_sem, c_logits, y, y_outputs,
                   competencies, prev_interventions):
