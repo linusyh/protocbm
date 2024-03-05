@@ -3,11 +3,9 @@ import hydra
 from argparse import ArgumentParser
 from pathlib import Path
 import logging
+from datetime import datetime
 
-import wandb
-import torch
 from torch.utils.data import DataLoader
-import torchvision
 import lightning as L
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
@@ -112,11 +110,7 @@ def train_loop(
     val_dl: DataLoader,
     config: DictConfig,
     batch_process_fn = None,
-):  
-    
-    # Build model
-    model = construct_model(config, train_dl, batch_process_fn)
-    
+):      
     # Welcome Screen
     logging.info("=" * 20)
     logging.info(f"Train set size: {len(train_dl.dataset)}")
@@ -126,24 +120,38 @@ def train_loop(
     
     loggers = []
     
-    if "tensorboard" in config.keys():
-        loggers.append(TensorBoardLogger(config.tensorboard.dir, name=config.tensorboard.name))
-        
+    # Setup logging directory
+    dir_name = datetime.now().strftime("%y-%m-%dT%H%M%S")
+    
     # Setup wandb logging
     wandb_logger = None
     if "wandb" in config.keys():
         wandb_logger = create_wandb_logger(config)
         loggers.append(wandb_logger)
+        dir_name += "-" + str(wandb_logger.experiment.id)
+    
+    log_path = f"{config.universal.log_path}/{dir_name}"
+    logging.info(f"Logging to: {log_path}")
+    config.universal.log_path = log_path 
+    logging.info(f"tf_dir: {config.tensorboard.dir}")
+    
+    if "tensorboard" in config.keys():
+        loggers.append(TensorBoardLogger(config.tensorboard.dir, name=config.tensorboard.name))
+        
     
     # Set logging level
     logging.getLogger("lightning.pytorch").setLevel(config.log_level)    
  
-    # create callbacks
+    # Create callbacks
     callbacks = []
     for name, cb_conf in config.callbacks.items():
         logging.warn(f"Creating callback: {name}")
         cb = hydra.utils.instantiate(cb_conf)
         callbacks.append(cb)
+    
+        
+    # Build model
+    model = construct_model(config, train_dl, batch_process_fn)
     
     # Training
     trainer = L.Trainer(max_epochs=config.trainer.max_epochs,
