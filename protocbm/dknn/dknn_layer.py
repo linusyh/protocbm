@@ -19,11 +19,16 @@ from protocbm.dknn.pl import PL
 
 
 class DKNNLossSparseWeighted(torch.nn.Module):
-    def __init__(self, positive_weight=1.0, negative_weight=1.0, **kwargs):
+    def __init__(self, 
+                 positive_weight=1.0, 
+                 negative_weight=1.0,
+                 num_neighbour_agnostic: bool = True,
+                 **kwargs):
         super(DKNNLossSparseWeighted, self).__init__()
         logging.info(f"DKNNLossSparseWeighted initialised with pos={positive_weight} neg={negative_weight}")
         self.positive_weight = positive_weight
         self.negative_weight = negative_weight
+        self.num_neighbour_agnostic = num_neighbour_agnostic
     
     def forward(self, dknn_output, truth):
         weight_factor = self.positive_weight + self.negative_weight
@@ -31,7 +36,10 @@ class DKNNLossSparseWeighted(torch.nn.Module):
         amplification = torch.where(truth==1, 
                                     self.positive_weight * -1 / is_positive,
                                     self.negative_weight / (dknn_output.nelement()-is_positive))
-        return (dknn_output * amplification).sum() / weight_factor
+        loss = (dknn_output * amplification).sum() / weight_factor
+        if self.num_neighbour_agnostic:
+            loss *= dknn_output.shape[1]  
+        return loss
     
 
 class DKNNLoss(torch.nn.Module):

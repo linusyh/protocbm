@@ -75,6 +75,7 @@ class ProtoCBM(ConceptBottleneckModel):
                  dknn_loss_type="minus_count",
                  dknn_loss_params={},
                  dknn_max_neighbours=-1,
+                 dknn_hidden_layers=None,
                  x2c_only_epochs=0,
                  epoch_proto_recompute=1,
                  plateau_lr_scheduler_enable=False,
@@ -139,6 +140,17 @@ class ProtoCBM(ConceptBottleneckModel):
         
         self.optimiser = optimiser
         self.optimiser_params = optimiser_params
+        
+        # construct hidden layers
+        if dknn_hidden_layers is not None:
+            layers = [torch.nn.Linear(self.n_concepts, dknn_hidden_layers[0])]
+            for i in range(1, len(dknn_hidden_layers)):
+                layers.append(torch.nn.BatchNorm1d(dknn_hidden_layers[i-1]))
+                layers.append(torch.nn.ReLU())
+                layers.append(torch.nn.Linear(dknn_hidden_layers[i-1], dknn_hidden_layers[i]))
+            self.pre_proto_model = torch.nn.Sequential(*layers)
+        else:
+            self.pre_proto_model = None
     
     def _unpack_batch(self, batch):
         if self.batch_process_fn is not None:
@@ -225,7 +237,10 @@ class ProtoCBM(ConceptBottleneckModel):
             idx = torch.randperm(proto_x.shape[0])[:self.dknn_max_neighbours]
             proto_x = proto_x[idx, ...]
             proto_y = proto_y[idx]    
-            
+        
+        if self.pre_proto_model is not None:
+            c_pred = self.pre_proto_model(c_pred)
+            proto_x = self.pre_proto_model(proto_x)
         pred_y = self.proto_model(c_pred, proto_x)
         return pred_y, proto_y
     
@@ -233,10 +248,11 @@ class ProtoCBM(ConceptBottleneckModel):
         if self._if_x2c_only():
             return 0
         else:
-            query_y_one_hot = F.one_hot(query_y.long(), self.n_tasks)  # (B, C)
-            neighbour_y_one_hot = F.one_hot(neighbour_y.long(), self.n_tasks)  # (N, C)
-            correct = (query_y_one_hot.unsqueeze(1) * neighbour_y_one_hot.unsqueeze(0)).sum(-1).float() # (B, N)
+            # query_y_one_hot = F.one_hot(query_y.long(), self.n_tasks)  # (B, C)
+            # neighbour_y_one_hot = F.one_hot(neighbour_y.long(), self.n_tasks)  # (N, C)
+            # correct = (query_y_one_hot.unsqueeze(1) * neighbour_y_one_hot.unsqueeze(0)).sum(-1).float() # (B, N)
             
+            correct = (query_y.long().unsqueeze(1) == neighbour_y.long().unsqueeze(0)).float()
             loss = self.dknn_loss_function(scores, correct)
             return loss
         

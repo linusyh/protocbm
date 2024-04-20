@@ -1,5 +1,5 @@
 type: DKNN
-k: 2
+k: 10
 tau: 1.0
 method: deterministic
 num_samples: -1
@@ -10,3 +10,4 @@ loss_params:
   negative_weight: 1.0
   num_neighbour_agnostic: True  # Set to false to replicate older results before April 2024
 max_neighbours: -1
+hidden_layers: [32]
