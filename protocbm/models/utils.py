@@ -1,3 +1,4 @@
+from typing import Optional
 import torch
 import torchvision
 
@@ -29,7 +30,29 @@ def get_optimiser(name: str):
     return lookup.get(name.lower(), torch.optim.Adam)
 
 
-def get_backbone(arch, output_dim, pretrained=True):
+def get_backbone(arch: str, 
+                 output_dim: Optional[int], 
+                 pretrained: bool = True):
+    """
+    Retrieves the backbone model for a given architecture.
+
+    Args:
+        arch (str): The architecture name. Supported architectures: 
+            - "resnet18", "resnet34", "resnet50", "resnet101", "resnet152"
+            - "efficientnet-v2-s", "efficientnet-v2-m", "efficientnet-v2-l"
+        output_dim (int or None): The number of output dimensions. If None, the final model layer will be replaced by identity
+        pretrained (bool, optional): Whether to load pretrained weights for the backbone. Defaults to True.
+
+    Returns:
+        torch.nn.Module: The backbone model.
+
+    Raises:
+        ValueError: If the specified architecture is not supported.
+
+    Examples:
+        >>> backbone = get_backbone("resnet50", output_dim=1000, pretrained=True)
+    """
+    
     arch = arch.lower().strip()
     if arch.startswith("resnet"):
         if arch == "resnet18":

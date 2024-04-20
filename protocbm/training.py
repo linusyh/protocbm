@@ -18,7 +18,7 @@ from protocbm.models.protocbm import ProtoCBM
 from protocbm.models.protocem import ProtoCEM
 from protocbm.models.utils import aggregate_predictions
 
-def flatten_dict(d, parent_key='', sep='.'):
+def flatten_dict(d, parent_key='', sep='/'):
     """
     Flatten a nested dictionary.
 
@@ -62,46 +62,50 @@ def construct_model(config: DictConfig,
                     proto_dl: DataLoader,
                     batch_process_fn=None):
     
-    model_config_dict = dict(config.model.copy())
-    model_type = model_config_dict.pop("type")
-    model_config_dict.pop('proto')
-    
-    ModelClass = get_proto_model(model_type)
-    
-    args = dict(
-        n_concepts= config.dataset.n_concepts,
-        n_tasks=config.dataset.n_classes,
-        proto_train_dl=proto_dl,
-        batch_process_fn=batch_process_fn,
-        **model_config_dict
-    )
-    
-    # DKNN config
-    if config.model.proto.type.upper() == "DKNN":
-        d = dict(config.model.proto.copy())
-        d.pop('type')
-        for key, val in d.items():
-            args[f"dknn_{key}"] = val
-    
-    # optimiser config
-    optimiser_dict = dict(config.optimiser.copy())
-    opt_type = optimiser_dict.pop("type")
-    args["optimiser"] = opt_type
-    args["optimiser_params"] = optimiser_dict
-    
-    # lr scheduler config
-    lrs_dict = dict(config.lr_scheduler.copy())
-    lrs_type = lrs_dict.pop("type")
-    if lrs_type =="plateau":
-        monitor = lrs_dict.pop("monitor")
-        args["plateau_lr_scheduler_enable"] = True
-        args["plateau_lr_scheduler_monitor"] = monitor
-        args["plateau_lr_scheduler_params"] = lrs_dict
-    
-    model = ModelClass(
-        **args
-    )
-    return model
+    if "_target_" not in config.model.keys():
+        model_config_dict = dict(config.model.copy())
+        model_type = model_config_dict.pop("type")
+        model_config_dict.pop('proto')
+        
+        ModelClass = get_proto_model(model_type)
+        
+        args = dict(n_concepts=config.dataset.n_concepts,
+            n_tasks=config.dataset.n_classes,
+            proto_train_dl=proto_dl,
+            batch_process_fn=batch_process_fn,
+            **model_config_dict
+        )
+        
+        # DKNN config
+        if config.model.proto.type.upper() == "DKNN":
+            d = dict(config.model.proto.copy())
+            d.pop('type')
+            for key, val in d.items():
+                args[f"dknn_{key}"] = val
+        
+        # optimiser config
+        optimiser_dict = dict(config.optimiser.copy())
+        opt_type = optimiser_dict.pop("type")
+        args["optimiser"] = opt_type
+        args["optimiser_params"] = optimiser_dict
+        
+        # lr scheduler config
+        lrs_dict = dict(config.lr_scheduler.copy())
+        lrs_type = lrs_dict.pop("type")
+        if lrs_type =="plateau":
+            monitor = lrs_dict.pop("monitor")
+            args["plateau_lr_scheduler_enable"] = True
+            args["plateau_lr_scheduler_monitor"] = monitor
+            args["plateau_lr_scheduler_params"] = lrs_dict
+        
+        return ModelClass(
+            **args
+        )
+    else:
+        model = hydra.utils.instantiate(config.model, 
+                                        n_concepts=config.dataset.n_concepts,
+                                        n_tasks=config.dataset.n_classes)
+        return model
 
 
 def train_loop(
@@ -119,20 +123,22 @@ def train_loop(
     logging.info("=" * 20)
     
     loggers = []
-    
-    # Setup logging directory
-    dir_name = datetime.now().strftime("%y-%m-%dT%H%M%S")
-    
+
     # Setup wandb logging
     wandb_logger = None
     if "wandb" in config.keys():
         wandb_logger = create_wandb_logger(config)
         loggers.append(wandb_logger)
-        dir_name += "-" + str(wandb_logger.experiment.id)
     
-    log_path = f"{config.universal.log_path}/{dir_name}"
-    logging.info(f"Logging to: {log_path}")
-    config.universal.log_path = log_path 
+    # Formatting log_dirname
+    format_dict = {
+        "date": datetime.now().strftime("%y-%m-%d"),
+        "time": datetime.now().strftime("%H%M%S"),
+        "datetime": datetime.now().strftime("%y-%m-%dT%H%M%S"),
+        "wandb_id": wandb_logger.experiment.id if wandb_logger else "null"
+    }
+    config.universal.log_dirname = config.universal.log_dirname.format(**format_dict)
+    logging.info(f"Logging to: {config.universal.log_path}/{config.universal.log_dirname}")
     logging.info(f"tf_dir: {config.tensorboard.dir}")
     
     if "tensorboard" in config.keys():
@@ -145,10 +151,10 @@ def train_loop(
     # Create callbacks
     callbacks = []
     for name, cb_conf in config.callbacks.items():
-        logging.warn(f"Creating callback: {name}")
+        logging.warn(f"Creating callback: {name}: {cb_conf}")
         cb = hydra.utils.instantiate(cb_conf)
+        print(cb)
         callbacks.append(cb)
-    
         
     # Build model
     model = construct_model(config, train_dl, batch_process_fn)
