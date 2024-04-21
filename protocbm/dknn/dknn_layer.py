@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.modules.loss import _Loss
 import numpy as np
 
-from protocbm.dknn.neuralsort import NeuralSort
+from protocbm.dknn.neuralsort import FasterNeuralSort, NeuralSort
 from protocbm.dknn.pl import PL
 
 
@@ -95,7 +95,7 @@ class DKNN(torch.nn.Module):
     def __init__(self, k, tau=1.0, hard=False, method='deterministic', num_samples=-1, similarity='euclidean'):
         super(DKNN, self).__init__()
         self.k = k
-        self.soft_sort = NeuralSort(tau=tau, hard=hard)
+        self.soft_sort = FasterNeuralSort(k=k, tau=tau, hard=hard)
         self.method = method
         self.num_samples = num_samples
         self.similarity = similarity

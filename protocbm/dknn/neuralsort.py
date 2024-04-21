@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 
 
@@ -11,7 +12,7 @@ class NeuralSort(torch.nn.Module):
 
     def forward(self, scores: Tensor):
         """
-        scores: elements to be sorted. Typical shape: batch_size x n x 1
+        scores: elements to be sorted. Typical shape: batch_size x n
         """
         scores = scores.unsqueeze(-1)
         bsize = scores.size()[0]
@@ -38,4 +39,27 @@ class NeuralSort(torch.nn.Module):
 
             P[brc_idx[0], brc_idx[1], brc_idx[2]] = 1
             P_hat = (P - P_hat).detach() + P_hat
+        return P_hat
+    
+
+class FasterNeuralSort(torch.nn.Module):
+    def __init__(self, 
+                 k: int,
+                 tau: float = 1.0, 
+                 hard: bool = False):
+        super(FasterNeuralSort, self).__init__()
+        self.k = k
+        self.hard = hard
+        self.tau = tau
+    
+    def forward(self, scores):
+        bsize, dim = scores.size()
+        scores = torch.unsqueeze(scores, -1)
+
+        A_scores = torch.abs(scores - scores.permute(0, 2, 1))
+        B = torch.sum(A_scores, dim=-1, keepdim=True)
+        scaling = (dim + 1 - 2 * (torch.arange(self.k) + 1)).type(torch.FloatTensor).to(scores.device)
+        C = torch.matmul(scores, scaling.unsqueeze(0))
+        P_max = (C - B).permute(0, 2, 1)
+        P_hat = F.softmax(P_max / self.tau, dim=-1)
         return P_hat
