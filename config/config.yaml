@@ -37,8 +37,8 @@ trainer:
 log_level: INFO
 
 evaluation:
-  cas:
-    step: 50
+  #cas:
+  #  step: 50
 
 # Loggers
 wandb:
