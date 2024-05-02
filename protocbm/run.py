@@ -1,6 +1,5 @@
 from omegaconf import DictConfig, OmegaConf
 import hydra
-import wandb
 import torch
 import lightning as L
 import lightning.pytorch as pl
@@ -23,7 +22,6 @@ def main(cfg: DictConfig):
                test_dl=test_dl,
                val_dl=val_dl,
                config=cfg)
-    wandb.finish()
 
 
 if __name__ == "__main__":

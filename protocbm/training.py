@@ -1,3 +1,5 @@
+import os
+from typing import Mapping
 from omegaconf import DictConfig, OmegaConf
 import hydra
 from argparse import ArgumentParser
@@ -5,6 +7,7 @@ from pathlib import Path
 import logging
 from datetime import datetime
 
+import wandb
 from torch.utils.data import DataLoader
 import lightning as L
 import lightning.pytorch as pl
@@ -102,9 +105,9 @@ def construct_model(config: DictConfig,
             **args
         )
     else:
-        model = hydra.utils.instantiate(config.model, 
-                                        n_concepts=config.dataset.n_concepts,
-                                        n_tasks=config.dataset.n_classes)
+        model = hydra.utils.instantiate(config.model)
+        if hasattr(model, "set_proto_dataloader"):
+            model.set_proto_dataloader(proto_dl)
         return model
 
 
@@ -144,16 +147,18 @@ def train_loop(
     if "tensorboard" in config.keys():
         loggers.append(TensorBoardLogger(config.tensorboard.dir, name=config.tensorboard.name))
         
-    
     # Set logging level
-    logging.getLogger("lightning.pytorch").setLevel(config.log_level)    
+    log_level = os.environ.get("LOG_LEVEL") or config.get("log_level") or "INFO"
+    print(f"Log Level: {log_level}")
+    logging.getLogger("lightning.pytorch").setLevel(log_level)    
  
     # Create callbacks
     callbacks = []
     for name, cb_conf in config.callbacks.items():
-        logging.warn(f"Creating callback: {name}: {cb_conf}")
+        logging.debug(f"Creating callback: {name}: {cb_conf}")
         cb = hydra.utils.instantiate(cb_conf)
-        print(cb)
+        if isinstance(cb, Mapping):
+            logging.warn(f"Failed to instantiate callback: {name}: {cb_conf}")
         callbacks.append(cb)
         
     # Build model
@@ -168,6 +173,8 @@ def train_loop(
                         profiler=config.trainer.profiler,)
     trainer.fit(model, train_dl, val_dl)
     trainer.test(model, test_dl)
+
+    wandb.finish()
     
     # Run expensive evaluation metrics only for test set
     if "evaluation" in config.keys():
