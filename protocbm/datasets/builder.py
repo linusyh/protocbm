@@ -1,10 +1,12 @@
 from cem.data.CUB200 import cub_loader
 from cem.data import celeba_loader
+from cem.data.synthetic_loaders import generate_xor_data, generate_trig_data, generate_dot_data
 from protocbm.datasets.celeba_gender_age import load_celeba_subsets
-
 
 import logging
 import torch
+from torch.utils.data import TensorDataset, DataLoader
+import numpy as np
 from pathlib import Path
 from omegaconf import DictConfig
 
@@ -111,13 +113,43 @@ def build_celeba_genderage(dataset_config: DictConfig):
     return train_dl, val_dl, test_dl
 
 
+def build_synthetic_dataset(dataset_config: DictConfig):
+    name = dataset_config.name.upper().lower()
+    if name == "XOR":
+        generate_data = generate_xor_data
+    elif name == "TRIG":
+        generate_data = generate_trig_data
+    elif name == "DOT":
+        generate_data = generate_dot_data
+
+    dataset_size = dataset_config.dataset_size
+    batch_size = dataset_config.batch_size
+    num_workers = dataset_config.num_workers
+    random_seed = dataset_config.get("random_seed")
+    if random_seed is not None:
+        np.random.seed(random_seed)
+    
+    train_ds = TensorDataset(*generate_data(int(dataset_size * 0.7)))
+    train_dl = DataLoader(train_ds, batch_size=batch_size, num_workers=num_workers)
+    
+    test_ds = TensorDataset(*generate_data(int(dataset_size * 0.2)))
+    test_dl = DataLoader(test_ds, batch_size=batch_size, num_workers=num_workers)
+    
+    val_ds = TensorDataset(*generate_data(int(dataset_size * 0.1)))
+    val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=num_workers)
+    return train_dl, val_dl, test_dl
+    
+    
 def build_dataset(dataset_config: DictConfig):
-    logging.info(f"Building dataset: {dataset_config.name}")
-    if dataset_config.name.startswith("CUB_200"):
+    ds_name = dataset_config.name.upper().strip()
+    logging.info(f"Building dataset: {ds_name}")
+    if ds_name.startswith("CUB_200"):
         return build_cub(dataset_config)
-    elif dataset_config.name.startswith("CELEBA_GENDERAGE"):
+    elif ds_name.startswith("CELEBA_GENDERAGE"):
         return build_celeba_genderage(dataset_config)
-    elif dataset_config.name.startswith("CELEBA_CEM"):
+    elif ds_name.startswith("CELEBA_CEM"):
         return build_celeba_cem(dataset_config)
+    elif ds_name in ["XOR", "TRIG", "DOT"]:
+        return build_synthetic_dataset(dataset_config)
     else:
         raise ValueError(f"Unknown dataset: {dataset_config.name}")
