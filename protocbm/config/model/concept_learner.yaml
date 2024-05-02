@@ -18,3 +18,4 @@ lr_scheduler:
   strict: true
 arch: resnet18
 metric: null
+n_concepts: ${dataset.n_concepts}

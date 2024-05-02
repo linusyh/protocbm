@@ -1,0 +1,34 @@
+_target_: protocbm.models.proto_task_learner.ProtoTaskLearner
+type: ProtoTaskLearner
+n_concepts: ${dataset.n_concepts}
+n_classes: ${dataset.n_classes}
+optimiser: 
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: ${optimiser.lr}
+  weight_decay: ${optimiser.weight_decay}
+lr_scheduler:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: ${lr_scheduler.mode}
+    patience: ${lr_scheduler.patience}
+    factor: ${lr_scheduler.factor}
+    min_lr: ${lr_scheduler.min_lr}
+    verbose: ${lr_scheduler.verbose}
+  monitor: ${lr_scheduler.monitor}
+  strict: true
+hidden_layers: [10]
+proto:
+  _target_: protocbm.dknn.dknn_layer.DKNN
+  k: 2
+  tau: 1.0
+  method: deterministic
+  num_samples: -1
+  similarity: euclidean
+proto_loss:
+  _target_: protocbm.dknn.dknn_layer.DKNNLossSparseWeighted
+  positive_weight: 1.0
+  negative_weight: 1.0
+  num_neighbour_agnostic: false
+max_neighbours: 2000

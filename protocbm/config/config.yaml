@@ -36,7 +36,7 @@ trainer:
 
 log_level: INFO
 
-evaluation:
+evaluation: {}
   #cas:
   #  step: 50
 

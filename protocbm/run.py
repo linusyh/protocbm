@@ -1,6 +1,6 @@
 from omegaconf import DictConfig, OmegaConf
 import hydra
-
+import wandb
 import torch
 import lightning as L
 import lightning.pytorch as pl
@@ -11,7 +11,7 @@ from protocbm.training import *
 from protocbm.datasets.builder import build_dataset
 
 
-@hydra.main(version_base=None, config_path="../config", config_name="config")
+@hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(cfg: DictConfig):
     logging.info("Config:")
     logging.info(OmegaConf.to_yaml(cfg))
@@ -23,6 +23,7 @@ def main(cfg: DictConfig):
                test_dl=test_dl,
                val_dl=val_dl,
                config=cfg)
+    wandb.finish()
 
 
 if __name__ == "__main__":
