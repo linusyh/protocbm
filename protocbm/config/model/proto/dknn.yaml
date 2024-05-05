@@ -8,5 +8,5 @@ loss_type: sparse_weighted
 loss_params:
   positive_weight: 1.0
   negative_weight: 1.0
-  num_neighbour_agnostic: True  # Set to false to replicate older results before April 2024
+  num_neighbour_agnostic: False
 max_neighbours: -1
