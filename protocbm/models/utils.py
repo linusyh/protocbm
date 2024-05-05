@@ -76,6 +76,15 @@ def get_backbone(arch: str,
             backbone = torchvision.models.efficientnet_v2_l(weights=torchvision.models.EfficientNet_V2_L_Weights.DEFAULT if pretrained else None)
         if output_dim is not None:
             backbone.classifier[1] = torch.nn.Linear(backbone.classifier[1].in_features, output_dim)
+    elif arch == "synth_extractor":
+        output_dim = output_dim or 128
+        return torch.nn.Sequential(
+            torch.nn.LazyLinear(128),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(128, 128),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(128, output_dim),
+        )
     else:
         raise ValueError(f"Unknown architecture: {arch}")
     return backbone
