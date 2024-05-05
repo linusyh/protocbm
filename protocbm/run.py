@@ -12,9 +12,6 @@ from protocbm.datasets.builder import build_dataset
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(cfg: DictConfig):
-    logging.info("Config:")
-    logging.info(OmegaConf.to_yaml(cfg))
-    
     # Load the dataset
     train_dl, val_dl, test_dl = build_dataset(cfg.dataset)
     

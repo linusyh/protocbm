@@ -134,12 +134,14 @@ def train_loop(
         loggers.append(wandb_logger)
     
     # Formatting log_dirname
-    format_dict = {
+    format_dict = flatten_dict(config, sep='.')
+    format_dict.update({
         "date": datetime.now().strftime("%y-%m-%d"),
         "time": datetime.now().strftime("%H%M%S"),
         "datetime": datetime.now().strftime("%y-%m-%dT%H%M%S"),
         "wandb_id": wandb_logger.experiment.id if wandb_logger else "null"
-    }
+    })
+
     config.universal.log_dirname = config.universal.log_dirname.format(**format_dict)
     logging.info(f"Logging to: {config.universal.log_path}/{config.universal.log_dirname}")
     logging.info(f"tf_dir: {config.tensorboard.dir}")
@@ -160,6 +162,16 @@ def train_loop(
         if isinstance(cb, Mapping):
             logging.warn(f"Failed to instantiate callback: {name}: {cb_conf}")
         callbacks.append(cb)
+    
+    
+    # (Feature) Interprete loss weight ratio
+    if "ct_loss_ratio" in config.keys():
+        logging.info(f"Using ct_loss_ratio={config.ct_loss_ratio}")
+        concept_loss_weight = 2 / (1+config.ct_loss_ratio)
+        config.model.concept_loss_weight = concept_loss_weight
+        config.model.task_loss_weight = concept_loss_weight * config.ct_loss_ratio
+        logging.info(f"Concept Loss Weight: {config.model.concept_loss_weight}")
+        logging.info(f"Task Loss Weight:    {config.model.task_loss_weight}")
         
     # Build model
     model = construct_model(config, train_dl, batch_process_fn)
@@ -174,6 +186,7 @@ def train_loop(
     trainer.fit(model, train_dl, val_dl)
     trainer.test(model, test_dl)
 
+    # Finish wandb logging
     wandb.finish()
     
     # Run expensive evaluation metrics only for test set
