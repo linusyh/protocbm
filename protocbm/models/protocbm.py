@@ -1,4 +1,4 @@
-from cem.models.cbm import *
+from protocbm.models.cbm import *
 from protocbm.model import *
 from protocbm.models.utils import *
 from protocbm.dknn.dknn_layer import *
