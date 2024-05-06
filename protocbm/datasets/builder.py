@@ -113,7 +113,7 @@ def build_celeba_genderage(dataset_config: DictConfig):
 
 
 def build_synthetic_dataset(dataset_config: DictConfig):
-    name = dataset_config.name.upper().lower()
+    name = dataset_config.name.upper().strip()
     if name == "XOR":
         generate_data = generate_xor_data
     elif name == "TRIG":
@@ -128,14 +128,18 @@ def build_synthetic_dataset(dataset_config: DictConfig):
     if random_seed is not None:
         np.random.seed(random_seed)
     
-    train_ds = TensorDataset(*generate_data(int(dataset_size * 0.7)))
+    train_x, train_c, train_y = generate_data(int(dataset_size * 0.7))
+    train_ds = TensorDataset(train_x, train_y, train_c)
     train_dl = DataLoader(train_ds, batch_size=batch_size, num_workers=num_workers)
     
-    test_ds = TensorDataset(*generate_data(int(dataset_size * 0.2)))
+    test_x, test_c, test_y = generate_data(int(dataset_size * 0.2))
+    test_ds = TensorDataset(test_x, test_y, test_c)
     test_dl = DataLoader(test_ds, batch_size=batch_size, num_workers=num_workers)
     
-    val_ds = TensorDataset(*generate_data(int(dataset_size * 0.1)))
+    val_x, val_c, val_y = generate_data(int(dataset_size * 0.1))
+    val_ds = TensorDataset(val_x, val_y, val_c)
     val_dl = DataLoader(val_ds, batch_size=batch_size, num_workers=num_workers)
+    
     return train_dl, val_dl, test_dl
     
     

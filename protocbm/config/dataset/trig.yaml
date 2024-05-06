@@ -2,3 +2,5 @@ name: TRIG
 num_workers: 8
 batch_size: 256
 dataset_size: 3000
+n_concepts: 3
+n_classes: 2
