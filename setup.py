@@ -4,11 +4,11 @@ with open("README.md", "r") as f:
     long_description = f.read()
 
 setuptools.setup(
-    name="cem",
-    version="1.1.0",
-    author="Mateo Espinosa Zarlenga, Pietro Barbiero, Gabriele Ciravegna, Giuseppe Marra, Francesco Giannini, Michelangelo Diligenti, Zohreh Shams, Frederic Precioso, Stefano Melacci, Adrian Weller, Pietro Lio, Mateja Jamnik",
-    author_email="me466@cam.ac.uk",
-    description="Concept Embedding Model",
+    name="protocbm",
+    version="0.1.0",
+    author="Linus Leong, Mateo Espinosa, and others",
+    author_email="yhll2@cam.ac.uk",
+    description="Prototype-based Concept Bottleneck Models",
     long_description=long_description,
     license='MIT',
     long_description_content_type="text/markdown",

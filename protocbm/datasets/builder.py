@@ -1,5 +1,4 @@
-from cem.data.CUB200 import cub_loader
-from cem.data import celeba_loader
+from protocbm.datasets import celeba_cem, cub
 from cem.data.synthetic_loaders import generate_xor_data, generate_trig_data, generate_dot_data
 from protocbm.datasets.celeba_gender_age import load_celeba_subsets
 
@@ -34,35 +33,35 @@ def build_cub(dataset_config: DictConfig):
         use_cbm_concept_subset = True
         logging.debug("Using CBM concept subset")
     
-    train_dl = cub_loader.load_data([train_pkl],
-                                    use_attr=True,
-                                    no_img=False,
-                                    root_dir=cub_dir,
-                                    batch_size=batch_size,
-                                    num_workers=num_workers,
-                                    path_transform=path_transform,
-                                    is_training=True,
-                                    use_cbm_concept_subset=use_cbm_concept_subset)
+    train_dl = cub.load_data([train_pkl],
+                             use_attr=True,
+                             no_img=False,
+                             root_dir=cub_dir,
+                             batch_size=batch_size,
+                             num_workers=num_workers,
+                             path_transform=path_transform,
+                             is_training=True,
+                             use_cbm_concept_subset=use_cbm_concept_subset)
     
-    test_dl = cub_loader.load_data([test_pkl],
-                                    use_attr=True,
-                                    no_img=False,
-                                    root_dir=cub_dir,
-                                    batch_size=batch_size,
-                                    num_workers=num_workers,
-                                    path_transform=path_transform,
-                                    is_training=False,
-                                    use_cbm_concept_subset=use_cbm_concept_subset)
+    test_dl = cub.load_data([test_pkl],
+                            use_attr=True,
+                            no_img=False,
+                            root_dir=cub_dir,
+                            batch_size=batch_size,
+                            num_workers=num_workers,
+                            path_transform=path_transform,
+                            is_training=False,
+                            use_cbm_concept_subset=use_cbm_concept_subset)
     
-    val_dl = cub_loader.load_data([val_pkl],
-                                    use_attr=True,
-                                    no_img=False,
-                                    root_dir=cub_dir,
-                                    batch_size=batch_size,
-                                    num_workers=num_workers,
-                                    path_transform=path_transform,
-                                    is_training=False,
-                                    use_cbm_concept_subset=use_cbm_concept_subset)
+    val_dl = cub.load_data([val_pkl],
+                           no_img=False,
+                           use_attr=True,
+                           root_dir=cub_dir,
+                           batch_size=batch_size,
+                           num_workers=num_workers,
+                           path_transform=path_transform,
+                           is_training=False,
+                           use_cbm_concept_subset=use_cbm_concept_subset)
     logging.debug(f"Loaded CUB200: train={len(train_dl.dataset)}, val={len(val_dl.dataset)}, test={len(test_dl.dataset)}")
     return train_dl, val_dl, test_dl
 
@@ -85,7 +84,7 @@ def build_celeba_cem(dataset_config: DictConfig):
     (train_dl, 
      val_dl, 
      test_dl, 
-     imbalance) = celeba_loader.generate_data(
+     imbalance) = celeba_cem.generate_data(
         config=cem_config,
         root_dir=dataset_config.root_dir,
         train_shuffle=False
