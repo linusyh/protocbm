@@ -11,3 +11,5 @@ n_concepts: 38
 # normalizer config
 x_mean: ${universal.x_mean}
 x_std: ${universal.x_std}
+
+image_size: 64
