@@ -4,7 +4,8 @@ defaults:
 
 universal:
   data_path: ./data
-  log_path: ./logs/${model.type}-${dataset.name}
+  run_name: "unclassified"
+  log_path: ./logs/${dataset.name}/${model.type}/${universal.run_name}
   log_dirname: "{datetime}-{wandb_id}"
   x_mean: [0.485, 0.456, 0.406]
   x_std: [0.229, 0.224, 0.225]
@@ -43,7 +44,7 @@ evaluation: {}
 # Loggers
 wandb:
   _target_: lightning.pytorch.loggers.WandbLogger
-  name: ${model.type}-${dataset.name}
+  name: ${model.type}-${dataset.name}-${universal.run_name}
   entity: linus-cambridge
   project: "Part3-ProtoCBM"
   tags: []
