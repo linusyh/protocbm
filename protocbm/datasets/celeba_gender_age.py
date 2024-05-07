@@ -80,28 +80,33 @@ def load_celeba_subsets(root: str,
     val_ds = Subset(val_ds, sel_indices[1])
     test_ds = Subset(test_ds, sel_indices[2])
 
+    batch_size = config.get('batch_size', 64)
+    train_shuffle = config.get('train_shuffle', True)
+    num_workers = config.get('num_workers', 0)
+    pin_memory = config.get('pin_memory', torch.cuda.is_available())
+    
     train_dl = DataLoader(
         train_ds,
-        batch_size=config['batch_size'],
-        shuffle=config['train_shuffle'],
-        num_workers=config['num_workers'],
-        pin_memory=config['pin_memory'],
+        batch_size=batch_size,
+        shuffle=train_shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
     )
     
     val_dl = DataLoader(
         val_ds,
-        batch_size=config['batch_size'],
+        batch_size=batch_size,
         shuffle=False,
-        num_workers=config['num_workers'],
-        pin_memory=config['pin_memory'],
+        num_workers=num_workers,
+        pin_memory=pin_memory,
     )
     
     test_dl = DataLoader(
         test_ds,
-        batch_size=config['batch_size'],
+        batch_size=batch_size,
         shuffle=False,
-        num_workers=config['num_workers'],
-        pin_memory=config['pin_memory'],
+        num_workers=num_workers,
+        pin_memory=pin_memory,
     )
     
     return train_dl, val_dl, test_dl
