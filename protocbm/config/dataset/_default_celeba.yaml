@@ -5,3 +5,4 @@ defaults:
 root_dir: ${universal.data_path}/CelebA_torch/
 x_mean: ${universal.x_mean}
 x_std: ${universal.x_std}
+image_size: 64

@@ -1,25 +1,42 @@
-from protocbm.datasets import celeba_cem, cub
+from cem.data.CUB200 import cub_loader as cem_cub_loader
 from cem.data.synthetic_loaders import generate_xor_data, generate_trig_data, generate_dot_data
+from protocbm.datasets import celeba_cem, cub
+from protocbm.datasets.awa2 import AWA2
 from protocbm.datasets.celeba_gender_age import load_celeba_subsets
 
 import logging
 import torch
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, Subset
 import numpy as np
 from pathlib import Path
 from omegaconf import DictConfig
+
+
+def build_awa2(dataset_config: DictConfig):
+    logging.debug("Building AWA2 dataset")
+    root = Path(dataset_config.root_dir)
+    random_sampling_p = dataset_config.get('random_sampling_p', 1.0)
+    ds_configs = {k:v for k, v in dataset_config.items() if k in ['x_mean', 'x_std', 'split_file_name', 'image_size']}
+
+    train_ds = AWA2(root, split='train', **ds_configs)
+    val_ds = AWA2(root, split='val', **ds_configs)
+    test_ds = AWA2(root, split='test', **ds_configs)
+    
+    if  0 < random_sampling_p < 1:
+        train_ds = Subset(train_ds, np.random.permutation(len(train_ds))[:int(np.ceil(random_sampling_p * len(train_ds)))])
+        test_ds = Subset(test_ds, np.random.permutation(len(test_ds))[:int(np.ceil(random_sampling_p * len(test_ds)))])
+        val_ds = Subset(val_ds, np.random.permutation(len(val_ds))[:int(np.ceil(random_sampling_p * len(val_ds)))])
+
+    train_dl = DataLoader(train_ds, batch_size=dataset_config.batch_size, num_workers=dataset_config.num_workers)
+    val_dl = DataLoader(val_ds, batch_size=dataset_config.batch_size, num_workers=dataset_config.num_workers)
+    test_dl = DataLoader(test_ds, batch_size=dataset_config.batch_size, num_workers=dataset_config.num_workers)
+    return train_dl, val_dl, test_dl
 
 
 def build_cub(dataset_config: DictConfig):
     logging.debug("Building CUB200 dataset")
     cub_dir = Path(dataset_config.root_dir)
     pkl_dir = Path(dataset_config.pkl_dir)
-    
-    def path_transform(path):
-        path_parts = Path(path)
-        idx = path_parts.parts.index('CUB200')
-        rel_parts = path_parts.parts[idx+1:]
-        return cub_dir / Path(*rel_parts)
     
     train_pkl = str(pkl_dir / "train.pkl")
     test_pkl = str(pkl_dir / "test.pkl")
@@ -28,6 +45,18 @@ def build_cub(dataset_config: DictConfig):
     use_cbm_concept_subset = False
     batch_size = dataset_config.batch_size
     num_workers = dataset_config.num_workers
+      
+    if dataset_config.name == "CUB_200_112_FIXED":
+        logging.debug("Using Fixed CUB200 dataset")
+        path_part = "CUB_200_2011"
+    else:
+        path_part = "CUB200"
+    
+    def path_transform(path):
+        path_parts = Path(path)
+        idx = path_parts.parts.index(path_part)
+        rel_parts = path_parts.parts[idx+1:]
+        return cub_dir / Path(*rel_parts)
     
     if dataset_config.name == "CUB_200_112":
         use_cbm_concept_subset = True
@@ -95,7 +124,7 @@ def build_celeba_cem(dataset_config: DictConfig):
     return train_dl, val_dl, test_dl
 
 
-def build_celeba_genderage(dataset_config: DictConfig):
+def build_celeba_subset(dataset_config: DictConfig):
     config = {
         'batch_size': dataset_config.batch_size,
         'num_workers': dataset_config.num_workers,
@@ -106,6 +135,7 @@ def build_celeba_genderage(dataset_config: DictConfig):
     train_dl, val_dl, test_dl = load_celeba_subsets(
         root=dataset_config.root_dir,
         subset_indices_file=dataset_config.subset_file,
+        selected_concepts=dataset_config.get('selected_concepts'),
         config=config
     )
     logging.debug(f"Loaded CELEBA subsets: train={len(train_dl.dataset)}, val={len(val_dl.dataset)}, test={len(test_dl.dataset)}")
@@ -148,10 +178,12 @@ def build_dataset(dataset_config: DictConfig):
     logging.info(f"Building dataset: {ds_name}")
     if ds_name.startswith("CUB_200"):
         return build_cub(dataset_config)
-    elif ds_name.startswith("CELEBA_GENDERAGE"):
-        return build_celeba_genderage(dataset_config)
+    elif ds_name.startswith("CELEBA_GENDERAGE") or ds_name.startswith("CELEBA_BALANCED"):
+        return build_celeba_subset(dataset_config)
     elif ds_name.startswith("CELEBA_CEM"):
         return build_celeba_cem(dataset_config)
+    elif ds_name == "AWA2":
+        return build_awa2(dataset_config)
     elif ds_name in ["XOR", "TRIG", "DOT"]:
         return build_synthetic_dataset(dataset_config)
     else:

@@ -9,10 +9,14 @@ universal:
   log_dirname: "{datetime}-{wandb_id}"
   x_mean: [0.485, 0.456, 0.406]
   x_std: [0.229, 0.224, 0.225]
-  mode: max
-  monitor: val_c2y_acc_cls
-  early_stop_patience: 10
-  lr_patience: 5
+  #mode: max
+  #monitor: val_c2y_acc_cls
+  #early_stop_patience: 10
+  #lr_patience: 5
+  mode: min
+  monitor: val_loss
+  early_stop_patience: 40
+  lr_patience: 20
 
 optimiser:
   type: adam
@@ -45,8 +49,8 @@ evaluation: {}
 wandb:
   _target_: lightning.pytorch.loggers.WandbLogger
   name: ${model.type}-${dataset.name}-${universal.run_name}
-  entity: linus-cambridge
-  project: "Part3-ProtoCBM"
+  entity: linus-leong-yh
+  project: Part3-ProtoCBM
   tags: []
   settings:
     _target_: wandb.Settings

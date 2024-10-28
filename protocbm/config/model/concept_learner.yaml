@@ -3,8 +3,8 @@ type: concept_learner
 optimiser: 
   _target_: torch.optim.Adam
   _partial_: true
-  lr: 0.001
-  weight_decay: 0.0001
+  lr: ${optimiser.lr}
+  weight_decay: ${optimiser.weight_decay}
 lr_scheduler:
   scheduler:
     _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -19,3 +19,4 @@ lr_scheduler:
 arch: resnet18
 metric: null
 n_concepts: ${dataset.n_concepts}
+dropout_rate: null

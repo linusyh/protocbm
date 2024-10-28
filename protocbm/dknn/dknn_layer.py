@@ -43,11 +43,12 @@ class DKNNLossSparseWeighted(torch.nn.Module):
     
 
 class DKNNLoss(torch.nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, k ,**kwargs):
+        self.k = k
         super(DKNNLoss, self).__init__()
     
     def forward(self, dknn_output, truth):
-        return -(dknn_output * truth).sum()
+        return -(dknn_output * truth).sum() / self.k
 
 
 class DKNNInverseLoss(torch.nn.Module):
@@ -74,6 +75,7 @@ class DKNNMSELoss(_Loss):
         return F.mse_loss(dknn_output/self.k, truth, reduction=self.reduction)
 
 DKNN_LOSS_LOOKUP = {
+    "dknn_original": DKNNLoss,
     "minus_count": DKNNLoss,
     "inverse_count": DKNNInverseLoss,
     "sparse_weighted": DKNNLossSparseWeighted,

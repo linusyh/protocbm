@@ -15,6 +15,7 @@ NUM_CONCEPTS = 40
 def load_celeba_subsets(root: str,
                         config: Dict,
                         subset_indices_file: str,
+                        selected_concepts=None,
                         train_transform=None,
                         val_test_transform=None,
                         download: bool = False,
@@ -43,7 +44,11 @@ def load_celeba_subsets(root: str,
         ])
     
     sel_attribute_positive = torch.tensor([False] * NUM_CONCEPTS)
-    for sel_concept_idx in SELECTED_CONCEPTS:
+    
+    selected_concepts = selected_concepts or SELECTED_CONCEPTS
+    print(f"selected_concepts: {selected_concepts}")
+
+    for sel_concept_idx in selected_concepts:
         sel_attribute_positive[sel_concept_idx] = True
     
     def label_transform(attr_tensor):
@@ -51,7 +56,7 @@ def load_celeba_subsets(root: str,
         sel_concepts = attr_tensor[sel_attribute_positive]
         c = attr_tensor[~sel_attribute_positive]
         
-        binariser = torch.tensor([2**i for i in range(len(SELECTED_CONCEPTS))])
+        binariser = torch.tensor([2**i for i in range(len(selected_concepts))])
         y = torch.dot(sel_concepts, binariser)
         return y, c
     

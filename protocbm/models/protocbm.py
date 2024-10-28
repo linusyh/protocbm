@@ -209,6 +209,9 @@ class ProtoCBM(ConceptBottleneckModel):
         if (self.__epoch_counter % self.epoch_proto_recompute) == 0:
             self.clear_prototypes()
             
+    def on_train_end(self) -> None:
+        self.prepare_prototypes()
+            
     def _if_x2c_only(self):
             return self.__epoch_counter < self.x2c_only_epochs
         

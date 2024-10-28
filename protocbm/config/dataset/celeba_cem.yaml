@@ -7,7 +7,6 @@ n_classes: 256
 n_concepts: 6
 
 # Mateo's code specific
-image_size: 64
 use_binary_vector_class: true
 label_binary_width: 1
 num_hidden_concepts: 2

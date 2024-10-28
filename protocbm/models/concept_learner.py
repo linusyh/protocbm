@@ -1,14 +1,29 @@
 from typing import *
 import torch
+from torch.nn import Sequential, Dropout
 import torch.nn.functional as F
+from torchvision.models.resnet import ResNet
 import lightning as L
 import torchmetrics
 from protocbm.models.utils import *
 
+
+def resnet_add_dropout_final(model, dropout_rate):
+    assert isinstance(model, ResNet), "Attempting to add dropout to unsupported model (!= Resnet)"
+    fc = model.fc
+    new_fc = Sequential(
+                Dropout(dropout_rate),
+                fc
+            )
+    model.fc = new_fc
+    return model
+
+
 class ConceptLearner(L.LightningModule):
     def __init__(self, 
                  n_concepts: int,
-                 optimiser: torch.optim.Optimizer,
+                 dropout_rate: Optional[float] = None,
+                 optimiser: torch.optim.Optimizer=None,
                  lr_scheduler: Mapping = None,
                  arch: Optional[str] = None, 
                  model: torch.nn.Module = None,
@@ -16,16 +31,23 @@ class ConceptLearner(L.LightningModule):
                  prog_bar_metrics: Optional[Sequence[str]] = None,
                  **kwargs):
         super().__init__()
+        hyperparams = ('n_concepts', 'dropout_rate')
         if model is not None:
             self.backbone = model
         elif arch is not None:
             self.backbone = get_backbone(arch, n_concepts)
+            hyperparams += ('arch', )
         else:
             raise ValueError("Either model or arch must be provided")
-        self.optimiser = optimiser
+
+        self.save_hyperparameters(*hyperparams)
+        self.optimiser = optimiser or torch.optim.Adam
         self.lr_scheduler = lr_scheduler
         self.loss_fn = torch.nn.BCEWithLogitsLoss()
-        
+        self.dropout_rate = dropout_rate
+        if dropout_rate is not None:
+            self.backbone = resnet_add_dropout_final(self.backbone, dropout_rate)
+
         if metrics is None:
             self.metrics = torch.nn.ModuleDict({
                 "acc": torchmetrics.Accuracy(task='binary'), 

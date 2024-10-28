@@ -9,9 +9,16 @@ from protocbm._config import *
 from protocbm.training import *
 from protocbm.datasets.builder import build_dataset
 
+def initialise():
+    if torch.cuda.is_available():
+        torch.set_float32_matmul_precision('medium')
+    # L.seed_everything(773)
+
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(cfg: DictConfig):
+    initialise()
+
     # Load the dataset
     train_dl, val_dl, test_dl = build_dataset(cfg.dataset)
     
@@ -22,6 +29,4 @@ def main(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    torch.set_float32_matmul_precision('medium')
-    L.seed_everything(773)
     main()

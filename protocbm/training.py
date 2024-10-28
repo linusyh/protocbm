@@ -15,7 +15,6 @@ from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import hydra
 
-from cem.metrics.cas import concept_alignment_score
 from protocbm._config import *
 from protocbm.models.protocbm import ProtoCBM
 from protocbm.models.protocem import ProtoCEM
@@ -191,6 +190,7 @@ def train_loop(
     
     # Run expensive evaluation metrics only for test set
     if "evaluation" in config.keys():
+        from cem.metrics.cas import concept_alignment_score
         if "cas" in config.evaluation.keys():
             # Aggregate predictions
             raw_pred = trainer.predict(model, test_dl)
