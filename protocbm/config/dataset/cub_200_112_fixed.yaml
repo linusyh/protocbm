@@ -1,0 +1,13 @@
+defaults:
+  - _default
+  - _self_
+
+name: "CUB_200_112_FIXED"
+root_dir: ${universal.data_path}/CUB200_cem/
+pkl_dir: ${universal.data_path}/CUB200_cem/class_attr_data_10/
+n_classes: 200
+n_concepts: 112
+
+# normalizer config
+x_mean: ${universal.x_mean}
+x_std: ${universal.x_std}

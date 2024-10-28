@@ -1,0 +1,15 @@
+defaults:
+  - _default
+  - _self_
+
+name: AWA2
+root_dir: ${universal.data_path}/Animals_with_Attributes2/
+n_classes: 50
+n_concepts: 85
+random_sampling_p: 1.0
+split_file_name: split_shuffled.json
+
+# normalizer config
+x_mean: ${universal.x_mean}
+x_std: ${universal.x_std}
+
