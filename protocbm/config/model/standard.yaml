@@ -1,0 +1,20 @@
+_target_: protocbm.models.baselines.StandardResNet
+type: standard
+optimiser: 
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: ${optimiser.lr}
+  weight_decay: 0.0001
+lr_scheduler:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: ${universal.mode}
+    patience: ${universal.lr_patience}
+    factor: 0.1
+    min_lr: 1e-08
+    verbose: true
+  monitor: ${universal.monitor}
+  strict: true
+arch: resnet18
+n_tasks: ${dataset.n_classes}
