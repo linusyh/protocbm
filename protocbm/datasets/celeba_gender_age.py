@@ -29,6 +29,7 @@ def load_celeba_subsets(root: str,
     
     if train_transform is None:
         train_transform = transforms.Compose([
+            transforms.Resize(image_size),
             transforms.CenterCrop((image_size,image_size)),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.ColorJitter(0.1),
@@ -38,6 +39,7 @@ def load_celeba_subsets(root: str,
     
     if val_test_transform is None:
         val_test_transform = transforms.Compose([
+            transforms.Resize(image_size),
             transforms.CenterCrop((image_size,image_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=x_mean, std=x_std)
