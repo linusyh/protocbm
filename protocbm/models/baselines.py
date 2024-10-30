@@ -52,6 +52,7 @@ class StandardResNet(L.LightningModule):
         
         loss = self.loss(y_pred, y)
         self.log(f"{mode}/y_loss", loss)
+        self.log(f"{mode}/loss", loss)
         return loss
     
     def training_step(self, batch):
