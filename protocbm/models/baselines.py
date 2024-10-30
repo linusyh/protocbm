@@ -34,9 +34,17 @@ class StandardResNet(L.LightningModule):
         prob = F.sigmoid(logit)
         return prob
     
-    def _run_step(self, batch, mode):
+    def _unpack_batch(self, batch):
         x = batch[0]
-        y = batch[1]
+        if isinstance(batch[1], list):
+            y, c = batch[1]
+        else:
+            y, c = batch[1], batch[2]
+        c = c.float()
+        return x, y, c
+    
+    def _run_step(self, batch, mode):
+        x, y = self._unpack_batch(batch)[:2]
         y_pred = self(x)
         
         for name, metric_fn in self.metrics.items():
