@@ -18,3 +18,4 @@ lr_scheduler:
   strict: true
 arch: resnet18
 n_tasks: ${dataset.n_classes}
+hidden_layers: none

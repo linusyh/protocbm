@@ -1,9 +1,10 @@
 from typing import *
 import torch
 import torch.nn.functional as F
-import lightning as L
+from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss, Sequential, Linear, BatchNorm1d, SELU
 import torchmetrics
-from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
+import lightning as L
+
 from protocbm.models.utils import *
 
 
@@ -11,14 +12,25 @@ class StandardResNet(L.LightningModule):
     def __init__(self,
                  n_tasks: int,
                  arch: str = 'resnet18',
+                 hidden_layers = None,
                  optimiser = None,
                  lr_scheduler: Mapping = None,
                  metrics = None,
                  **kwargs):
         super().__init__()
-        self.save_hyperparameters('n_tasks', 'arch')
+        self.save_hyperparameters('n_tasks', 'arch', 'hidden_layers')
         self.n_tasks = n_tasks
-        self.backbone = get_backbone(arch, n_tasks)
+        if hidden_layers is not None:
+            backbone = get_backbone(arch, hidden_layers[0])
+            layers = [backbone]
+            for idx in range(1, len(hidden_layers)):
+                layers.append(Linear(hidden_layers[idx-1], hidden_layers[idx]))
+                layers.append(BatchNorm1d(hidden_layers[idx]))
+                layers.append(SELU())
+            layers.append(Linear(hidden_layers[-1], n_tasks))
+            self.backbone = Sequential(*layers)
+        else:
+            self.backbone = get_backbone(arch, n_tasks)
         if metrics is None:
             self.metrics = torch.nn.ModuleDict({
                 "acc": torchmetrics.Accuracy(task='multiclass', num_classes=n_tasks), 
@@ -83,14 +95,25 @@ class MultiTaskResNet(L.LightningModule):
                  n_concepts: int,
                  n_tasks: int,
                  arch: str = 'resnet18',
+                 hidden_layers = None,
                  optimiser = None,
                  lr_scheduler: Mapping = None,
                  **kwargs):
         super().__init__()
-        self.save_hyperparameters('n_tasks', 'arch')
+        self.save_hyperparameters('n_tasks', 'arch', 'hidden_layers')
         self.n_concepts = n_concepts
         self.n_tasks = n_tasks
-        self.backbone = get_backbone(arch, n_concepts+n_tasks)
+        if hidden_layers is not None:
+            backbone = get_backbone(arch, hidden_layers[0])
+            layers = [backbone]
+            for idx in range(1, len(hidden_layers)):
+                layers.append(Linear(hidden_layers[idx-1], hidden_layers[idx]))
+                layers.append(BatchNorm1d(hidden_layers[idx]))
+                layers.append(SELU())
+            layers.append(Linear(hidden_layers[-1], n_tasks+n_concepts))
+            self.backbone = Sequential(*layers)
+        else:
+            self.backbone = get_backbone(arch, n_tasks+n_concepts)
         self.concept_metrics = torch.nn.ModuleDict({
             "acc": torchmetrics.Accuracy(task='binary'), 
             "f1":  torchmetrics.F1Score(task='binary'),
