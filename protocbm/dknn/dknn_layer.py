@@ -104,13 +104,21 @@ class DKNN(torch.nn.Module):
 
     # query: M x p
     # neighbors: N x p
-    #
+    # concept_weights: M x p
     # returns:
-    def forward(self, query, neighbors, tau=1.0):      
+    def forward(self, query, neighbors, tau=1.0, concept_weights=None):      
         if self.similarity == 'euclidean':
-            diffs = (query.unsqueeze(1) - neighbors.unsqueeze(0))
+            diffs = (query.unsqueeze(1) - neighbors.unsqueeze(0)) # M x N x p
             squared_diffs = diffs**2
-            l2_norms = squared_diffs.sum(2)
+            if concept_weights is not None:
+                if concept_weights.ndim == 1 and len(concept_weights) == query.shape[-1]:
+                    concept_weights = concept_weights[None, None, :]
+                elif concept_weights.ndim == 2 and concept_weights.shape[-1] == query.shape[-1]:
+                    concept_weights = concept_weights.unsqeeze(1)
+                else:
+                    raise ValueError(f'Unsupported concept_weights shape: {concept_weights.shape}')
+                squared_diffs *= concept_weights
+            l2_norms = squared_diffs.sum(2) # M x N
             norms = l2_norms
             scores = -norms  # B * N
             

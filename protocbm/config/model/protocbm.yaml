@@ -10,3 +10,4 @@ bool: False
 sigmoidal_extra_capacity: True
 bottleneck_nonlinear: null
 output_latent: False
+weighted_concepts: null

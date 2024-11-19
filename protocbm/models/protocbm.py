@@ -7,6 +7,7 @@ import sys
 from functools import partial
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from typing import *
 
 
 def compute_concept_accuracy(c_pred, c_true):
@@ -52,7 +53,8 @@ class ProtoCBM(ConceptBottleneckModel):
                  output_latent=False,
                  x2c_model=None,
                  x2c_arch="resnet18",
-
+                 weighted_concepts=Optional[Literal['local', 'global']],
+                 
                  optimiser="adam",
                  optimiser_params={},
                  task_class_weights=None,
@@ -140,6 +142,15 @@ class ProtoCBM(ConceptBottleneckModel):
         
         self.optimiser = optimiser
         self.optimiser_params = optimiser_params
+        
+        self.weighted_concepts = weighted_concepts
+        if weighted_concepts == 'local':
+            self.concept_weights = torch.nn.Parameter(torch.ones(n_concepts))
+        elif weighted_concepts == 'global':
+            self.concept_weights_model = torch.nn.Sequential(
+                torch.nn.Linear(n_concepts, n_concepts),
+                torch.nn.SELU()
+            )
         
         # construct hidden layers
         if dknn_hidden_layers is not None:
@@ -244,7 +255,15 @@ class ProtoCBM(ConceptBottleneckModel):
         if self.pre_proto_model is not None:
             c_pred = self.pre_proto_model(c_pred)
             proto_x = self.pre_proto_model(proto_x)
-        pred_y = self.proto_model(c_pred, proto_x)
+        
+        if self.weighted_concepts == 'local':
+            concept_weights = self.concept_weights
+        elif self.weighted_concepts == 'global':
+            concept_weights = self.concept_weights_model(c_pred)
+        elif self.weighted_concepts is None:
+            concept_weights = None        
+        
+        pred_y = self.proto_model(c_pred, proto_x, concept_weights=concept_weights)
         return pred_y, proto_y
     
     def dknn_loss(self, query_y, scores, neighbour_y):
